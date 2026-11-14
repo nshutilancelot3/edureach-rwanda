@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+{% set pct = (100 * result.score / result.total)|round|int %}
+<section class="card score {{ 'good' if pct >= 50 else 'low' }}">
+  <p>{{ t('your_score') }}</p>
+  <div class="big-score">{{ result.score }} / {{ result.total }}</div>
+  <p>{{ pct }}%</p>
+</section>
+{% if locked %}<div class="flash">{{ t('already_taken') }}</div>{% endif %}
+{% for qn in questions %}
+  {% set mine = answers.get(qn.id|string) %}
+  <div class="card review {{ 'ok' if mine == qn.correct else 'bad' }}">
+    <strong>{{ loop.index }}. {{ qn.prompt }}</strong>
+    <div>{{ '✅ ' ~ t('correct') if mine == qn.correct else '❌ ' ~ t('wrong') }} —
+      {{ t('right_answer') }}: <b>{{ qn.correct|upper }}</b> {{ qn['option_' ~ qn.correct] }}</div>
+  </div>
+{% endfor %}
+<a class="btn big" href="{{ url_for('student_home') }}">📚 {{ t('lessons') }}</a>
+{% endblock %}

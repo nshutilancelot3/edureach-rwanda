@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Class progress</h1>
+<section class="card">
+  <h2>My quizzes</h2>
+  <table><tr><th>Quiz</th><th>Subject</th><th>Grade</th><th>Students done</th><th>Average</th></tr>
+  {% for q in quizzes %}<tr><td>{{ q.title }}</td><td>{{ q.subject }}</td><td>{{ q.grade }}</td><td>{{ q.attempts }}</td>
+    <td>{{ (q.avg_pct|int ~ '%') if q.avg_pct is not none else '—' }}</td></tr>
+  {% else %}<tr><td colspan="5">No quizzes yet.</td></tr>{% endfor %}</table>
+</section>
+<section class="card">
+  <h2>Latest results</h2>
+  <table><tr><th>Student</th><th>Grade</th><th>Quiz</th><th>Score</th><th>When (UTC)</th><th>Sync</th></tr>
+  {% for r in results %}<tr><td>{{ r.full_name }}</td><td>{{ r.grade }}</td><td>{{ r.title }}</td>
+    <td>{{ r.score }}/{{ r.total }}</td><td>{{ r.submitted_at[:16].replace('T', ' ') }}</td>
+    <td><span class="tag {{ r.sync_status|lower }}">{{ r.sync_status }}</span></td></tr>
+  {% else %}<tr><td colspan="6">No results yet.</td></tr>{% endfor %}</table>
+</section>
+{% endblock %}

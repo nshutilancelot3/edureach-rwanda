@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>⭐ {{ t('my_progress') }}</h1>
+<div class="stats">
+  <div class="stat"><span>{{ opened }}</span>{{ t('lessons_opened') }}</div>
+  <div class="stat"><span>{{ results|length }}</span>{{ t('quizzes_taken') }}</div>
+  <div class="stat"><span>{{ (avg ~ '%') if avg is not none else '—' }}</span>{{ t('average') }}</div>
+</div>
+<section class="card">
+  <h2>{{ t('quiz_history') }}</h2>
+  {% for r in results %}
+  {% set pct = (100 * r.score / r.total)|round|int %}
+  <div class="row">
+    <div><strong>{{ r.title }}</strong><div class="muted">{{ r.subject }} · {{ r.submitted_at[:10] }}</div></div>
+    <div class="bar"><div style="width: {{ pct }}%"></div></div>
+    <b>{{ r.score }}/{{ r.total }}</b>
+  </div>
+  {% else %}<p class="muted">{{ t('no_results') }}</p>{% endfor %}
+</section>
+{% endblock %}

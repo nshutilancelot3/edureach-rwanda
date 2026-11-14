@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ 'Edit lesson' if lesson else 'Upload a lesson' }}</h1>
+<section class="card">
+<form method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Title<input name="title" value="{{ form.title or '' }}" required></label>
+  <div class="grid2">
+    <label>Subject<select name="subject" required><option value="">Choose…</option>
+      {% for s in SUBJECTS %}<option {{ 'selected' if form.subject == s }}>{{ s }}</option>{% endfor %}</select></label>
+    <label>Grade<select name="grade" required><option value="">Choose…</option>
+      {% for gr in GRADES %}<option {{ 'selected' if form.grade == gr }}>{{ gr }}</option>{% endfor %}</select></label>
+  </div>
+  <label>Lesson notes<textarea name="body" rows="10" placeholder="Type or paste the lesson notes here">{{ form.body or '' }}</textarea></label>
+  <label>Attach a file (optional: PDF, slides, image or video)<input type="file" name="file"></label>
+  {% if lesson and lesson.file_name %}<p class="muted">Current file: {{ lesson.file_name }}</p>{% endif %}
+  <button class="big">Save lesson</button>
+</form>
+</section>
+{% endblock %}

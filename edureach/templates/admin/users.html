@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Accounts</h1>
+<p class="muted">Only administrators can create accounts. There is no self sign-up.</p>
+<div class="grid2">
+<section class="card">
+  <h2>Create an account</h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Full name<input name="full_name" required></label>
+    <label>Username<input name="username" required></label>
+    <label>Password or PIN<input name="password" required minlength="4"></label>
+    <label>Role
+      <select name="role" required>
+        <option value="student">Student</option><option value="teacher">Teacher</option><option value="admin">Administrator</option>
+      </select></label>
+    <label>Grade (students)
+      <select name="grade"><option value="">—</option>{% for gr in GRADES %}<option>{{ gr }}</option>{% endfor %}</select></label>
+    <label>Language
+      <select name="language"><option value="en">English</option><option value="rw">Kinyarwanda</option></select></label>
+    <button class="big">Create account</button>
+  </form>
+</section>
+<section class="card">
+  <h2>All accounts ({{ users|length }})</h2>
+  <table>
+    <tr><th>Name</th><th>Username</th><th>Role</th><th>Grade</th><th></th></tr>
+    {% for u in users %}
+    <tr class="{{ '' if u.active else 'off' }}">
+      <td>{{ u.full_name }}</td><td>{{ u.username }}</td><td>{{ u.role }}</td><td>{{ u.grade or '' }}</td>
+      <td>{% if u.id != g.user.id %}
+        <form method="post" action="{{ url_for('admin_toggle', user_id=u.id) }}" class="inline">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="small {{ 'danger' if u.active else '' }}">{{ 'Switch off' if u.active else 'Switch on' }}</button>
+        </form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>New quiz for “{{ lesson.title }}”</h1>
+<p class="muted">Fill in as many questions as you need (up to {{ n }}). Leave the rest empty. Tick the right answer so the quiz can mark itself offline.</p>
+<form method="post">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <section class="card"><label>Quiz title<input name="title" value="{{ form.title or '' }}" placeholder="{{ lesson.title }} quiz"></label></section>
+  {% for i in range(1, n + 1) %}
+  <section class="card">
+    <h3>Question {{ i }}</h3>
+    <label>Question<input name="q{{ i }}_prompt" value="{{ form['q%d_prompt' % i] or '' }}"></label>
+    {% for k in ['a','b','c','d'] %}
+    <div class="opt">
+      <input type="radio" name="q{{ i }}_correct" value="{{ k }}" title="Correct answer" {{ 'checked' if form['q%d_correct' % i] == k }}>
+      <input name="q{{ i }}_{{ k }}" placeholder="Option {{ k|upper }}{{ ' (optional)' if k in 'cd' }}" value="{{ form['q%d_%s' % (i, k)] or '' }}">
+    </div>
+    {% endfor %}
+  </section>
+  {% endfor %}
+  <button class="big">Save quiz</button>
+</form>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Activity log</h1>
+<p class="muted">Uploads and account changes on this hub (most recent first).</p>
+<section class="card">
+<table>
+  <tr><th>When (UTC)</th><th>Who</th><th>Event</th><th>Detail</th></tr>
+  {% for r in rows %}<tr><td>{{ r.at }}</td><td>{{ r.username or '—' }}</td><td>{{ r.event }}</td><td>{{ r.detail }}</td></tr>
+  {% else %}<tr><td colspan="4">Nothing logged yet.</td></tr>{% endfor %}
+</table>
+</section>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t('hello') }}, {{ g.user.full_name }}</h1>
+<p><a class="btn big" href="{{ url_for('lesson_form') }}">➕ Upload a new lesson</a></p>
+<section class="card">
+  <h2>My lessons ({{ lessons|length }})</h2>
+  {% for l in lessons %}
+  <div class="row">
+    <div>
+      <strong>{{ l.title }}</strong>
+      <div class="muted">{{ l.subject }} · {{ l.grade }} · {{ l.quiz_count }} quiz(zes) · <span class="tag {{ l.sync_status|lower }}">{{ l.sync_status }}</span></div>
+    </div>
+    <div class="actions">
+      <a class="btn small" href="{{ url_for('quiz_form', lesson_id=l.id) }}">＋ Quiz</a>
+      <a class="btn small ghost" href="{{ url_for('lesson_form', lesson_id=l.id) }}">Edit</a>
+      <form method="post" action="{{ url_for('lesson_delete', lesson_id=l.id) }}" class="inline" onsubmit="return confirm('Remove this lesson and its quizzes?')">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="small danger">Remove</button>
+      </form>
+    </div>
+  </div>
+  {% else %}<p class="muted">You haven't uploaded any lessons yet.</p>{% endfor %}
+</section>
+{% endblock %}

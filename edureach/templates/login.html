@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card narrow">
+  <h1>{{ t('app_name') }}</h1>
+  <p class="muted">{{ t('tagline') }}</p>
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  <form method="post" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>{{ t('username') }}<input name="username" required autofocus></label>
+    <label>{{ t('password') }}<input name="password" type="password" required></label>
+    <button class="big">{{ t('login') }} →</button>
+  </form>
+</section>
+{% endblock %}
