@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_icons.html' import icon %}
 {% block content %}
 <section class="card narrow">
   <h1>{{ t('app_name') }}</h1>
@@ -8,7 +9,7 @@
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label>{{ t('username') }}<input name="username" required autofocus></label>
     <label>{{ t('password') }}<input name="password" type="password" required></label>
-    <button class="big">{{ t('login') }} →</button>
+    <button class="big">{{ t('login') }} {{ icon('arrow-right') }}</button>
   </form>
 </section>
 {% endblock %}

@@ -1,3 +1,4 @@
+{% from '_icons.html' import icon %}
 <!doctype html>
 <html lang="{{ 'rw' if lang == 'rw' else 'en' }}">
 <head>
@@ -8,9 +9,9 @@
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="{{ url_for('home') }}"><span class="logo">📘</span> {{ t('app_name') }}</a>
+  <a class="brand" href="{{ url_for('home') }}">{{ icon('book', 22) }} {{ t('app_name') }}</a>
   <nav>
-    <a class="pill" href="{{ url_for('set_lang', code='rw' if lang == 'en' else 'en') }}">🌐 {{ t('language') }}</a>
+    <a class="pill" href="{{ url_for('set_lang', code='rw' if lang == 'en' else 'en') }}">{{ icon('globe', 18) }} {{ t('language') }}</a>
     {% if g.user %}
       <form method="post" action="{{ url_for('logout') }}" class="inline">
         <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -22,15 +23,15 @@
 {% if g.user %}
 <nav class="tabs">
   {% if g.user.role == 'student' %}
-    <a href="{{ url_for('student_home') }}" class="{{ 'on' if request.endpoint == 'student_home' }}">📚 {{ t('lessons') }}</a>
-    <a href="{{ url_for('student_progress') }}" class="{{ 'on' if request.endpoint == 'student_progress' }}">⭐ {{ t('my_progress') }}</a>
+    <a href="{{ url_for('student_home') }}" class="{{ 'on' if request.endpoint == 'student_home' }}">{{ icon('books') }} {{ t('lessons') }}</a>
+    <a href="{{ url_for('student_progress') }}" class="{{ 'on' if request.endpoint == 'student_progress' }}">{{ icon('star') }} {{ t('my_progress') }}</a>
   {% elif g.user.role == 'teacher' %}
-    <a href="{{ url_for('teacher_home') }}" class="{{ 'on' if request.endpoint == 'teacher_home' }}">📚 My lessons</a>
-    <a href="{{ url_for('lesson_form') }}" class="{{ 'on' if request.endpoint == 'lesson_form' }}">➕ New lesson</a>
-    <a href="{{ url_for('teacher_progress') }}" class="{{ 'on' if request.endpoint == 'teacher_progress' }}">📊 Class progress</a>
+    <a href="{{ url_for('teacher_home') }}" class="{{ 'on' if request.endpoint == 'teacher_home' }}">{{ icon('books') }} My lessons</a>
+    <a href="{{ url_for('lesson_form') }}" class="{{ 'on' if request.endpoint == 'lesson_form' }}">{{ icon('plus') }} New lesson</a>
+    <a href="{{ url_for('teacher_progress') }}" class="{{ 'on' if request.endpoint == 'teacher_progress' }}">{{ icon('chart') }} Class progress</a>
   {% else %}
-    <a href="{{ url_for('admin_users') }}" class="{{ 'on' if request.endpoint == 'admin_users' }}">👥 Accounts</a>
-    <a href="{{ url_for('admin_log') }}" class="{{ 'on' if request.endpoint == 'admin_log' }}">🧾 Activity log</a>
+    <a href="{{ url_for('admin_users') }}" class="{{ 'on' if request.endpoint == 'admin_users' }}">{{ icon('users') }} Accounts</a>
+    <a href="{{ url_for('admin_log') }}" class="{{ 'on' if request.endpoint == 'admin_log' }}">{{ icon('list') }} Activity log</a>
   {% endif %}
 </nav>
 {% endif %}
@@ -40,6 +41,6 @@
   {% endfor %}
   {% block content %}{% endblock %}
 </main>
-<footer class="foot">🔌 Works offline on the school network</footer>
+<footer class="foot">{{ icon('wifi-off', 16) }} Works offline on the school network</footer>
 </body>
 </html>

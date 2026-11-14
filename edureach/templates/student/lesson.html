@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% from '_icons.html' import icon %}
 {% block content %}
-<a class="btn ghost small" href="{{ url_for('student_home') }}">← {{ t('back') }}</a>
+<a class="btn ghost small" href="{{ url_for('student_home') }}">{{ icon('arrow-left', 16) }} {{ t('back') }}</a>
 <article class="card lesson">
   <span class="tile-subj">{{ lesson.subject }} · {{ lesson.grade }} · {{ lesson.teacher }}</span>
   <h1>{{ lesson.title }}</h1>
@@ -9,14 +10,14 @@
     {% set ext = lesson.file_name.rsplit('.', 1)[-1]|lower %}
     {% if ext in ['png', 'jpg', 'jpeg'] %}<img class="media" src="{{ url_for('lesson_file', name=lesson.file_name) }}" alt="">
     {% elif ext == 'mp4' %}<video class="media" controls preload="metadata" src="{{ url_for('lesson_file', name=lesson.file_name) }}"></video>
-    {% else %}<p><a class="btn" href="{{ url_for('lesson_file', name=lesson.file_name) }}">📎 {{ t('attachment') }}</a></p>{% endif %}
+    {% else %}<p><a class="btn" href="{{ url_for('lesson_file', name=lesson.file_name) }}">{{ icon('clip') }} {{ t('attachment') }}</a></p>{% endif %}
   {% endif %}
 </article>
 {% for qz in quizzes %}
   {% if qz.id in taken %}
     <a class="btn big ghost" href="{{ url_for('quiz_take', quiz_id=qz.id) }}">{{ qz.title }} · {{ t('quiz_done') }}</a>
   {% else %}
-    <a class="btn big" href="{{ url_for('quiz_take', quiz_id=qz.id) }}">✏️ {{ t('take_quiz') }}: {{ qz.title }}</a>
+    <a class="btn big" href="{{ url_for('quiz_take', quiz_id=qz.id) }}">{{ icon('pencil') }} {{ t('take_quiz') }}: {{ qz.title }}</a>
   {% endif %}
 {% endfor %}
 {% endblock %}

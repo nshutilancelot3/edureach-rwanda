@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% from '_icons.html' import icon %}
 {% block content %}
-<h1>⭐ {{ t('my_progress') }}</h1>
+<h1>{{ icon('star', 24) }} {{ t('my_progress') }}</h1>
 <div class="stats">
   <div class="stat"><span>{{ opened }}</span>{{ t('lessons_opened') }}</div>
   <div class="stat"><span>{{ results|length }}</span>{{ t('quizzes_taken') }}</div>

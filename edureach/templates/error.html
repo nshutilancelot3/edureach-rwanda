@@ -1,5 +1,6 @@
 {% extends "base.html" %}
+{% from '_icons.html' import icon %}
 {% block content %}
 <section class="card narrow"><h1>{{ code }}</h1><p>{{ message }}</p>
-<a class="btn" href="{{ url_for('home') }}">← {{ t('back') }}</a></section>
+<a class="btn" href="{{ url_for('home') }}">{{ icon('arrow-left') }} {{ t('back') }}</a></section>
 {% endblock %}

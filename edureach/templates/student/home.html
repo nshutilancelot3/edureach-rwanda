@@ -1,12 +1,13 @@
 {% extends "base.html" %}
+{% from '_icons.html' import icon %}
 {% block content %}
-<h1>{{ t('hello') }}, {{ g.user.full_name.split()[0] }} 👋</h1>
+<h1>{{ t('hello') }}, {{ g.user.full_name.split()[0] }}</h1>
 <form class="filters card" method="get">
   <label>{{ t('subject') }}<select name="subject" onchange="this.form.submit()"><option value="">{{ t('all') }}</option>
     {% for s in SUBJECTS %}<option {{ 'selected' if subject == s }}>{{ s }}</option>{% endfor %}</select></label>
   <label>{{ t('grade') }}<select name="grade" onchange="this.form.submit()"><option value="all">{{ t('all') }}</option>
     {% for gr in GRADES %}<option {{ 'selected' if grade == gr }}>{{ gr }}</option>{% endfor %}</select></label>
-  <label class="grow">🔎 {{ t('search') }}<input name="q" value="{{ q }}"></label>
+  <label class="grow">{{ icon('search', 16) }} {{ t('search') }}<input name="q" value="{{ q }}"></label>
   <button>{{ t('search') }}</button>
 </form>
 <div class="tiles">
@@ -14,7 +15,7 @@
   <a class="tile" href="{{ url_for('lesson_view', lesson_id=l.id) }}">
     <span class="tile-subj">{{ l.subject }} · {{ l.grade }}</span>
     <strong>{{ l.title }}</strong>
-    <span class="tile-foot">📖 {{ t('open') }}{% if l.quiz_id %} · ✏️ {{ t('take_quiz') }}{% endif %}</span>
+    <span class="tile-foot">{{ icon('open', 16) }} {{ t('open') }}{% if l.quiz_id %} · {{ icon('pencil', 16) }} {{ t('take_quiz') }}{% endif %}</span>
   </a>
 {% else %}<p class="muted">{{ t('no_lessons') }}</p>{% endfor %}
 </div>
