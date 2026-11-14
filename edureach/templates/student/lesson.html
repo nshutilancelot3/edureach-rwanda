@@ -14,7 +14,7 @@
 </article>
 {% for qz in quizzes %}
   {% if qz.id in taken %}
-    <a class="btn big ghost" href="{{ url_for('quiz_take', quiz_id=qz.id) }}">✅ {{ qz.title }} · {{ t('quiz_done') }}</a>
+    <a class="btn big ghost" href="{{ url_for('quiz_take', quiz_id=qz.id) }}">{{ qz.title }} · {{ t('quiz_done') }}</a>
   {% else %}
     <a class="btn big" href="{{ url_for('quiz_take', quiz_id=qz.id) }}">✏️ {{ t('take_quiz') }}: {{ qz.title }}</a>
   {% endif %}

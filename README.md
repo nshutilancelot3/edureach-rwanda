@@ -8,24 +8,24 @@ Built from the EduReach Rwanda SRS v1.0 (Lancelot Nshuti, ALU). This is **increm
 
 | SRS requirement | Status |
 |---|---|
-| FR 1.1 Admin creates accounts (no self sign-up) | ✅ |
-| FR 1.2 Offline login with password or PIN | ✅ |
-| FR 2.1 Upload lessons (notes + PDF/slides/image/video), tagged by subject & grade | ✅ |
-| FR 2.2 Edit / remove own lessons (teachers can't touch other teachers' content) | ✅ |
-| FR 2.3 Create quizzes with an answer key | ✅ |
-| FR 3.1 Browse and search lessons by subject and grade | ✅ |
-| FR 3.2 View lessons offline | ✅ |
-| FR 3.3 Take quizzes offline with instant marking; results locked after submit | ✅ |
-| FR 4.1 Record lesson views and quiz submissions | ✅ |
-| FR 4.2 Student sees own quiz history and average | ✅ |
-| FR 4.3 Teacher sees class results on their own quizzes | ✅ |
-| FR 6.1 Admin switches accounts on/off | ✅ |
-| NFR 3 English / Kinyarwanda toggle (student screens) | ✅ partial |
-| NFR 6 Power-cut safety (SQLite WAL + synchronous=FULL, atomic file writes) | ✅ |
-| NFR 9 Log of uploads and account changes | ✅ |
-| FR 5 Sync with Central Sync Server | ⏳ next increment |
-| FR 6.2 / 6.3 Reports and hub status | ⏳ |
-| Teacher resets a quiz attempt | ⏳ |
+| FR 1.1 Admin creates accounts (no self sign-up) | Done |
+| FR 1.2 Offline login with password or PIN | Done |
+| FR 2.1 Upload lessons (notes + PDF/slides/image/video), tagged by subject & grade | Done |
+| FR 2.2 Edit / remove own lessons (teachers can't touch other teachers' content) | Done |
+| FR 2.3 Create quizzes with an answer key | Done |
+| FR 3.1 Browse and search lessons by subject and grade | Done |
+| FR 3.2 View lessons offline | Done |
+| FR 3.3 Take quizzes offline with instant marking; results locked after submit | Done |
+| FR 4.1 Record lesson views and quiz submissions | Done |
+| FR 4.2 Student sees own quiz history and average | Done |
+| FR 4.3 Teacher sees class results on their own quizzes | Done |
+| FR 6.1 Admin switches accounts on/off | Done |
+| NFR 3 English / Kinyarwanda toggle (student screens) | In progress |
+| NFR 6 Power-cut safety (SQLite WAL + synchronous=FULL, atomic file writes) | Done |
+| NFR 9 Log of uploads and account changes | Done |
+| FR 5 Sync with Central Sync Server | In progress |
+| FR 6.2 / 6.3 Reports and hub status | In progress |
+| Teacher resets a quiz attempt | In progress |
 
 ## Run it
 

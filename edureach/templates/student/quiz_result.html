@@ -11,7 +11,7 @@
   {% set mine = answers.get(qn.id|string) %}
   <div class="card review {{ 'ok' if mine == qn.correct else 'bad' }}">
     <strong>{{ loop.index }}. {{ qn.prompt }}</strong>
-    <div>{{ '✅ ' ~ t('correct') if mine == qn.correct else '❌ ' ~ t('wrong') }} —
+    <div>{{ t('correct') if mine == qn.correct else t('wrong') }} —
       {{ t('right_answer') }}: <b>{{ qn.correct|upper }}</b> {{ qn['option_' ~ qn.correct] }}</div>
   </div>
 {% endfor %}
