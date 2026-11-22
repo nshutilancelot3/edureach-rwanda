@@ -52,8 +52,24 @@ pytest
 
 Python 3 + Flask, SQLite, server-rendered HTML with almost no JavaScript, and no web fonts or animation, so it stays light on low-power hardware. Data lives in `instance/` (database, uploaded files and secret key) and is not committed.
 
+## Deploy to production
+
+Deploy to Railway in one click:
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new?template=https://github.com/nshutilancelot3/edureach-rwanda)
+
+Alternatively, deploy to Render or any WSGI-compatible host:
+
+1. Connect your GitHub repo
+2. Set buildpack/runtime to Python 3.12
+3. Run `pip install -r requirements.txt && python seed.py` as build command
+4. Set start command to `waitress-serve --port=$PORT --host=0.0.0.0 'edureach:create_app()'`
+5. Deploy
+
+The Procfile is included for Heroku-compatible platforms.
+
 ## Known gaps
 
 - Kinyarwanda strings are a first draft and need checking by a fluent speaker. Teacher and admin screens are English only for now.
 - Not yet tested on a Raspberry Pi or a low-end Android tablet, or with 40 students at once (NFR 2, NFR 7).
-- Use a production server (e.g. `waitress`) instead of `flask run` on the real hub.
+- Production deployment uses `waitress` server; local development uses Flask dev server.
