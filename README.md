@@ -63,7 +63,7 @@ Alternatively, deploy to Render or any WSGI-compatible host:
 1. Connect your GitHub repo
 2. Set buildpack/runtime to Python 3.12
 3. Run `pip install -r requirements.txt && python seed.py` as build command
-4. Set start command to `waitress-serve --port=$PORT --host=0.0.0.0 'edureach:create_app()'`
+4. Set start command to `waitress-serve --port=$PORT --host=0.0.0.0 --call 'edureach:create_app'`
 5. Deploy
 
 The Procfile is included for Heroku-compatible platforms.
