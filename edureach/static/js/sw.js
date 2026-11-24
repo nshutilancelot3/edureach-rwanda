@@ -1,17 +1,19 @@
 /* EduReach — Service Worker.
  *
  * Strategy per request type:
- *   navigations  network-first, then exact cache hit, then the offline shell.
- *                The shell rebuilds any student/teacher screen from IndexedDB,
- *                so a lesson the device has never opened still works offline.
+ *   navigations  network-first, then the offline shell. The shell rebuilds any
+ *                student or teacher screen from IndexedDB, so a lesson the
+ *                device has never opened still works offline.
  *   /static/*    cache-first with background refresh (app code and styles).
  *   /files/*     cache-first (lesson attachments; large and immutable).
  *   /api/*       network-only — the page's JS decides what to do on failure.
  */
 
-var VERSION = 'v4';
+// Bump on every change to the shell or the scripts below. Activation clears
+// the old caches, so devices pick the new code up on their next visit instead
+// of serving yesterday's app from cache indefinitely.
+var VERSION = 'v6';
 var SHELL_CACHE = 'edureach-shell-' + VERSION;
-var PAGE_CACHE = 'edureach-pages-' + VERSION;
 var FILE_CACHE = 'edureach-files-' + VERSION;
 
 var SHELL_URL = '/offline-shell';
@@ -42,7 +44,7 @@ self.addEventListener('install', function (event) {
 });
 
 self.addEventListener('activate', function (event) {
-  var keep = [SHELL_CACHE, PAGE_CACHE, FILE_CACHE];
+  var keep = [SHELL_CACHE, FILE_CACHE];
   event.waitUntil(
     caches.keys().then(function (names) {
       return Promise.all(names.map(function (name) {
@@ -60,30 +62,24 @@ function isNavigation(request) {
   return accept.indexOf('text/html') !== -1;
 }
 
-/* Pages: try the hub, fall back to this exact page, then to the shell. */
+/* Pages: try the hub, otherwise hand over to the shell.
+ *
+ * Deliberately no cache of server-rendered pages. Replaying one offline looks
+ * like it worked but isn't: its forms post to a hub that cannot answer and its
+ * CSRF token is stale, so a teacher would fill in a lesson and lose it on Save.
+ * The shell knows what it can and cannot do offline and says so. */
 function handleNavigation(request) {
-  return fetch(request)
-    .then(function (response) {
-      if (response && response.ok) {
-        var copy = response.clone();
-        caches.open(PAGE_CACHE).then(function (c) { c.put(request, copy); });
-      }
-      return response;
-    })
-    .catch(function () {
-      return caches.match(request, { ignoreSearch: false }).then(function (hit) {
-        if (hit) return hit;
-        return caches.match(SHELL_URL).then(function (shell) {
-          if (shell) return shell;
-          return new Response(
-            '<!doctype html><meta charset="utf-8"><title>Offline</title>' +
-            '<p style="font:17px system-ui;padding:24px">EduReach has not finished ' +
-            'installing on this device yet. Connect once, then try again.</p>',
-            { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-          );
-        });
-      });
+  return fetch(request).catch(function () {
+    return caches.match(SHELL_URL).then(function (shell) {
+      if (shell) return shell;
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><title>Offline</title>' +
+        '<p style="font:17px system-ui;padding:24px">EduReach has not finished ' +
+        'installing on this device yet. Connect once, then try again.</p>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
     });
+  });
 }
 
 /* App code and styles: serve instantly, refresh quietly in the background. */

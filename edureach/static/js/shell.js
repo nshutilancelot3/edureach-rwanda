@@ -42,6 +42,7 @@
       books: '<path d="M4 19V5a2 2 0 0 1 2-2h4v18H6a2 2 0 0 0-2 2z"/><path d="M14 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4z"/>',
       star: '<path d="m12 3 2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8L6.6 19.6l1-6L3.3 9.4l6-.9z"/>',
       pencil: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+      plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
       search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
       open: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v7H3V3h7"/>',
       send: '<path d="m22 2-7 20-4-9-9-4z"/>',
@@ -73,6 +74,7 @@
               '<a href="/student/progress" data-nav>' + icon('star') + ' ' + esc(t('my_progress')) + '</a>';
       } else if (user.role === 'teacher') {
         nav = '<a href="/teacher" data-nav>' + icon('books') + ' My lessons</a>' +
+              '<a href="/teacher/lessons/new" data-nav>' + icon('plus') + ' New lesson</a>' +
               '<a href="/teacher/progress" data-nav>' + icon('chart') + ' Class progress</a>';
       } else {
         nav = '<a href="/admin/users" data-nav>' + icon('books') + ' Accounts</a>';
@@ -415,20 +417,167 @@
   function screenTeacherHome() {
     var mine = cache.lessons.filter(function (l) { return l.teacher_id === (user && user.id); });
     var html = '<h1>' + esc(t('hello')) + ', ' + esc((user && user.full_name) || '') + '</h1>' +
+      '<a class="btn big" href="/teacher/lessons/new" data-nav>' + icon('plus') + ' Upload a new lesson</a>' +
       '<section class="card"><h2>My lessons (' + mine.length + ')</h2>';
+
     if (!mine.length) {
       html += '<p class="muted">No lessons saved on this device yet.</p>';
     }
     mine.forEach(function (l) {
+      var unsent = l.id < 0;
       html += '<div class="row"><div><strong>' + esc(l.title) + '</strong>' +
         '<div class="muted">' + esc(l.subject) + ' · ' + esc(l.grade) + ' · ' +
         quizFor(l.id).length + ' quiz(zes) · <span class="tag ' +
-        (l.sync_status === 'SYNCED' ? 'synced' : 'pending') + '">' + esc(l.sync_status || 'PENDING') +
-        '</span></div></div></div>';
+        (l.sync_status === 'SYNCED' ? 'synced' : 'pending') + '">' +
+        esc(unsent ? 'ON THIS DEVICE' : (l.sync_status || 'PENDING')) + '</span></div></div>' +
+        '<div class="actions">' +
+          '<a class="btn small ghost" href="/teacher/lessons/' + l.id + '/edit" data-nav>Edit</a>' +
+          '<button class="small danger" data-delete-lesson="' + l.id + '">Remove</button>' +
+        '</div></div>';
     });
+
     html += '</section>' +
-      '<p class="muted">Creating and editing lessons needs the hub. Your saved lessons stay readable here.</p>';
+      '<p class="muted">Lessons written here are kept on the device and sent to the hub ' +
+      'automatically. Attaching a file and building a quiz still need the hub.</p>';
     paint(html);
+
+    Array.prototype.forEach.call(el('shell-main').querySelectorAll('[data-delete-lesson]'), function (btn) {
+      btn.addEventListener('click', function () {
+        deleteLesson(parseInt(btn.getAttribute('data-delete-lesson'), 10));
+      });
+    });
+  }
+
+  function screenLessonForm(id) {
+    var lesson = id ? cache.lessons.filter(function (l) { return l.id === id; })[0] : null;
+    if (id && !lesson) return screenMissing('That lesson is not saved on this device.');
+    if (lesson && lesson.teacher_id !== (user && user.id)) {
+      return screenMissing('That lesson belongs to another teacher.');
+    }
+
+    var opts = function (list, selected) {
+      return list.map(function (v) {
+        return '<option' + (selected === v ? ' selected' : '') + '>' + esc(v) + '</option>';
+      }).join('');
+    };
+
+    paint(
+      '<h1>' + (lesson ? 'Edit lesson' : 'New lesson') + '</h1>' +
+      '<form class="card" id="shell-lesson">' +
+        '<label>Title<input name="title" required value="' + esc(lesson ? lesson.title : '') + '"></label>' +
+        '<label>Subject<select name="subject">' + opts(SUBJECTS, lesson ? lesson.subject : '') + '</select></label>' +
+        '<label>Grade<select name="grade">' + opts(GRADES, lesson ? lesson.grade : (user && user.grade) || '') + '</select></label>' +
+        '<label>Lesson notes<textarea name="body" rows="10" required>' + esc(lesson ? lesson.body : '') + '</textarea></label>' +
+        '<p class="muted">Attaching a file needs the hub. You can add one later once you reconnect.</p>' +
+        '<button class="big">' + icon('send') + ' Save on this device</button>' +
+      '</form>' +
+      '<a class="btn ghost small" href="/teacher" data-nav>' + icon('arrow-left', 16) + ' Back</a>'
+    );
+
+    el('shell-lesson').addEventListener('submit', function (e) {
+      e.preventDefault();
+      saveLesson(lesson, new FormData(e.target));
+    });
+  }
+
+  function warn(message) {
+    var box = document.createElement('div');
+    box.className = 'flash error';
+    box.textContent = message;
+    var main = el('shell-main');
+    main.insertBefore(box, main.firstChild.nextSibling);
+    global.scrollTo(0, 0);
+  }
+
+  function saveLesson(lesson, data) {
+    var fields = {
+      title: (data.get('title') || '').trim(),
+      subject: data.get('subject'),
+      grade: data.get('grade'),
+      body: (data.get('body') || '').trim()
+    };
+    if (!fields.title) return warn('Give the lesson a title.');
+    if (!fields.body) return warn('A lesson written offline needs notes.');
+
+    var now = new Date().toISOString();
+
+    // A lesson that has never reached the hub has no server id yet, so an edit
+    // is folded into the queued creation. Queuing an update against an id the
+    // hub has never seen would simply fail when it was replayed.
+    if (lesson && lesson.id < 0) {
+      var merged = Object.assign({}, lesson, fields, { updated_at: now });
+      return D.put('lessons', merged)
+        .then(function () { return D.get('outbox', lesson.client_uuid); })
+        .then(function (queued) {
+          if (!queued) return null;
+          queued.payload = Object.assign({}, queued.payload, fields, { updated_at: now });
+          return D.put('outbox', queued);
+        })
+        .then(afterLessonWrite, function (err) { warn('Could not save: ' + err.message); });
+    }
+
+    if (lesson) {
+      var updated = Object.assign({}, lesson, fields, { updated_at: now, sync_status: 'PENDING' });
+      return D.put('lessons', updated)
+        .then(function () {
+          return D.enqueue('lesson', 'update', Object.assign({ id: lesson.id }, fields, { updated_at: now }));
+        })
+        .then(afterLessonWrite, function (err) { warn('Could not save: ' + err.message); });
+    }
+
+    var uuid = D.uuid();
+    var record = Object.assign({
+      id: -Date.now(),
+      client_uuid: uuid,
+      teacher_id: user.id,
+      teacher: user.full_name,
+      file_name: null,
+      created_at: now,
+      updated_at: now,
+      sync_status: 'PENDING'
+    }, fields);
+
+    return D.put('lessons', record)
+      .then(function () {
+        return D.put('outbox', {
+          uuid: uuid,
+          entity: 'lesson',
+          op: 'create',
+          payload: Object.assign({ client_uuid: uuid, updated_at: now }, fields),
+          state: 'pending',
+          attempts: 0,
+          last_error: null,
+          queued_at: now
+        });
+      })
+      .then(afterLessonWrite, function (err) { warn('Could not save: ' + err.message); });
+  }
+
+  function deleteLesson(id) {
+    var lesson = cache.lessons.filter(function (l) { return l.id === id; })[0];
+    if (!lesson) return;
+    if (!global.confirm('Remove "' + lesson.title + '"?')) return;
+
+    // Never reached the hub, so dropping the queued creation is the whole job.
+    if (id < 0) {
+      return D.remove('outbox', lesson.client_uuid)
+        .then(function () { return D.remove('lessons', id); })
+        .then(afterLessonWrite);
+    }
+
+    return D.remove('lessons', id)
+      .then(function () { return D.enqueue('lesson', 'delete', { id: id }); })
+      .then(afterLessonWrite);
+  }
+
+  function afterLessonWrite() {
+    return loadAll().then(function () {
+      if (global.EduSync) {
+        global.EduSync.refreshPending();
+        if (global.EduSync.isOnline()) global.EduSync.cycle();
+      }
+      go('/teacher');
+    });
   }
 
   function screenTeacherProgress() {
@@ -507,6 +656,10 @@
     if (path === '/student/progress') return screenStudentProgress();
     if (path === '/teacher') return screenTeacherHome();
     if (path === '/teacher/progress') return screenTeacherProgress();
+    if (path === '/teacher/lessons/new') return screenLessonForm(null);
+
+    var edit = path.match(/^\/teacher\/lessons\/(-?\d+)\/edit$/);
+    if (edit) return screenLessonForm(parseInt(edit[1], 10));
 
     return screenMissing('That screen needs the hub. It will work again once you reconnect.');
   }
