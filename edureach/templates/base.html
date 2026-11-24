@@ -42,5 +42,12 @@
   {% block content %}{% endblock %}
 </main>
 <footer class="foot">{{ icon('wifi-off', 16) }} Works offline on the school network</footer>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(err => {
+    console.log('Service Worker registration failed:', err);
+  });
+}
+</script>
 </body>
 </html>
