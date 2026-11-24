@@ -39,9 +39,76 @@ def create_app(test_config=None):
     store.init_db(app.config["DATABASE"])
     app.teardown_appcontext(store.close_db)
 
+    # Auto-seed demo data if database is empty
+    with app.app_context():
+        db = store.get_db()
+        try:
+            user_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            if user_count == 0:
+                _load_demo_data(db)
+        except Exception:
+            pass
+
     _register_helpers(app)
     _register_routes(app)
     return app
+
+
+def _load_demo_data(db):
+    """Load demo accounts and lessons on first startup."""
+    try:
+        USERS = [
+            ("admin", "admin123", "Hub Administrator", "admin", None, "en"),
+            ("teacher", "teach123", "Mukamana Claudine", "teacher", None, "en"),
+            ("student", "1234", "Ishimwe Eric", "student", "P6", "en"),
+        ]
+
+        LESSONS = [
+            ("Fractions: adding and subtracting", "Mathematics", "P6",
+             "A fraction shows part of a whole. The top number is the numerator and the bottom number is the denominator.\n\n"
+             "To add fractions with the same denominator, add the numerators and keep the denominator:\n"
+             "   2/7 + 3/7 = 5/7",
+             [("What is 2/7 + 3/7?", "5/7", "5/14", "6/7", "1/7", "a"),
+              ("Which number is the denominator in 3/8?", "3", "8", "11", "24", "b"),
+              ("What is 1/2 + 1/4?", "2/6", "1/6", "3/4", "2/4", "c")]),
+            ("The water cycle", "Science", "P6",
+             "Water moves around the Earth in a cycle.\n\n"
+             "1. Evaporation: the sun heats water in lakes and rivers, and it rises as vapour.\n"
+             "2. Condensation: the vapour cools and forms clouds.\n"
+             "3. Precipitation: water falls back as rain.\n"
+             "4. Collection: rain gathers in rivers, lakes and underground, and the cycle starts again.",
+             [("What makes water rise as vapour?", "Wind", "The sun's heat", "Cold air", "Rocks", "b"),
+              ("What do we call water falling as rain?", "Evaporation", "Condensation", "Precipitation", "Collection", "c")]),
+        ]
+
+        ids = {}
+        with db:
+            for username, pw, name, role, grade, lang in USERS:
+                cur = db.execute(
+                    "INSERT INTO users (username, password_hash, full_name, role, grade, language, created_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (username, generate_password_hash(pw), name, role, grade, lang, store.now()),
+                )
+                ids[username] = cur.lastrowid
+
+            for title, subject, grade, body, questions in LESSONS:
+                ts = store.now()
+                lesson_id = db.execute(
+                    "INSERT INTO lessons (teacher_id, title, subject, grade, body, created_at, updated_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)", (ids["teacher"], title, subject, grade, body, ts, ts),
+                ).lastrowid
+                if questions:
+                    quiz_id = db.execute(
+                        "INSERT INTO quizzes (lesson_id, teacher_id, title, created_at) VALUES (?, ?, ?, ?)",
+                        (lesson_id, ids["teacher"], f"{title.split(':')[0]} quiz", ts),
+                    ).lastrowid
+                    for pos, (prompt, a, b, c, d, correct) in enumerate(questions, 1):
+                        db.execute(
+                            "INSERT INTO questions (quiz_id, position, prompt, option_a, option_b, option_c, option_d, correct)"
+                            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (quiz_id, pos, prompt, a, b, c, d, correct),
+                        )
+    except Exception as e:
+        print(f"Demo data already loaded or error: {e}")
 
 
 def _load_secret(instance_path):
