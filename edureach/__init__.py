@@ -389,6 +389,35 @@ def _register_routes(app):
         ).fetchall()
         return render_template("teacher/progress.html", quizzes=quizzes, results=results)
 
+    # Teachers can clear one attempt so a pupil can sit the quiz again.
+    # Results are otherwise locked (FR 3.3), so this is the only way back.
+    @app.route("/teacher/results/<int:result_id>/reset", methods=["POST"])
+    @login_required("teacher")
+    def result_reset(result_id):
+        db = store.get_db()
+        row = db.execute(
+            "SELECT r.*, u.full_name, q.title, q.teacher_id FROM quiz_results r"
+            " JOIN users u ON u.id = r.student_id"
+            " JOIN quizzes q ON q.id = r.quiz_id WHERE r.id = ?", (result_id,)
+        ).fetchone()
+        if row is None:
+            abort(404)
+        if row["teacher_id"] != g.user["id"]:
+            abort(403)  # same rule as lessons: only your own content
+
+        with db:
+            db.execute("DELETE FROM quiz_results WHERE id = ?", (result_id,))
+            # Drop the matching submission so the pupil's own progress page and
+            # the hub's activity log agree with each other.
+            db.execute(
+                "DELETE FROM activity WHERE student_id = ? AND quiz_id = ? AND kind = 'submit_quiz'",
+                (row["student_id"], row["quiz_id"]),
+            )
+            store.log_event(db, g.user["id"], "reset_quiz_result",
+                            f"{row['full_name']} on {row['title']}")
+        flash(f"{row['full_name']} can take {row['title']} again.", "ok")
+        return redirect(url_for("teacher_progress"))
+
     # ---------------------------------------------------------- student
     # FR 3.1 browse + search
     @app.route("/student")

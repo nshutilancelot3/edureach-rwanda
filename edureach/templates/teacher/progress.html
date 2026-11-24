@@ -10,10 +10,14 @@
 </section>
 <section class="card">
   <h2>Latest results</h2>
-  <table><tr><th>Student</th><th>Grade</th><th>Quiz</th><th>Score</th><th>When (UTC)</th><th>Sync</th></tr>
+  <table><tr><th>Student</th><th>Grade</th><th>Quiz</th><th>Score</th><th>When (UTC)</th><th>Sync</th><th></th></tr>
   {% for r in results %}<tr><td>{{ r.full_name }}</td><td>{{ r.grade }}</td><td>{{ r.title }}</td>
     <td>{{ r.score }}/{{ r.total }}</td><td>{{ r.submitted_at[:16].replace('T', ' ') }}</td>
-    <td><span class="tag {{ r.sync_status|lower }}">{{ r.sync_status }}</span></td></tr>
-  {% else %}<tr><td colspan="6">No results yet.</td></tr>{% endfor %}</table>
+    <td><span class="tag {{ r.sync_status|lower }}">{{ r.sync_status }}</span></td>
+    <td><form method="post" action="{{ url_for('result_reset', result_id=r.id) }}" class="inline"
+              onsubmit="return confirm('Let {{ r.full_name }} take {{ r.title }} again? This clears their score.')">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small ghost">Reset</button></form></td></tr>
+  {% else %}<tr><td colspan="7">No results yet.</td></tr>{% endfor %}</table>
 </section>
 {% endblock %}
