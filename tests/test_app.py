@@ -399,3 +399,82 @@ def test_password_field_gets_a_reveal_control(client):
     """The eye toggle is attached by ui.js, which must load on the login page."""
     html = client.get("/login").get_data(as_text=True)
     assert "js/ui.js" in html
+
+
+# ------------------------------------------- teacher resets an attempt
+
+def test_teacher_resets_an_attempt_so_the_student_can_retake(client):
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    assert "already took this quiz" in client.get("/quizzes/1").get_data(as_text=True)
+    client.get("/logout")
+
+    login(client, "t1")
+    assert post(client, "/teacher/results/1/reset", {},
+                form_url="/teacher/progress").status_code == 302
+    client.get("/logout")
+
+    # The quiz is offered again rather than showing the locked result.
+    login(client, "s1")
+    page = client.get("/quizzes/1").get_data(as_text=True)
+    assert "already took this quiz" not in page
+    assert "Submit answers" in page
+
+
+def test_a_teacher_cannot_reset_another_teachers_quiz(client):
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    client.get("/logout")
+
+    login(client, "t2")
+    assert post(client, "/teacher/results/1/reset", {},
+                form_url="/teacher/progress").status_code == 403
+
+
+def test_resetting_an_attempt_is_written_to_the_audit_log(app, client):
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    client.get("/logout")
+    login(client, "t1")
+    post(client, "/teacher/results/1/reset", {}, form_url="/teacher/progress")
+
+    with app.app_context():
+        row = store.get_db().execute(
+            "SELECT * FROM audit_log WHERE event = 'reset_quiz_result'"
+        ).fetchone()
+        assert row is not None
+        assert "S1 Person" in row["detail"]
+
+
+def test_reset_clears_the_submission_from_student_progress(app, client):
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    client.get("/logout")
+    login(client, "t1")
+    post(client, "/teacher/results/1/reset", {}, form_url="/teacher/progress")
+    client.get("/logout")
+
+    login(client, "s1")
+    assert "No quizzes taken yet" in client.get("/student/progress").get_data(as_text=True)
+    with app.app_context():
+        left = store.get_db().execute(
+            "SELECT COUNT(*) FROM activity WHERE kind = 'submit_quiz'"
+        ).fetchone()[0]
+        assert left == 0
