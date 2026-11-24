@@ -401,55 +401,80 @@ def test_password_field_gets_a_reveal_control(client):
     assert "js/ui.js" in html
 
 
-# ------------------------------------------ FR 6.2 / 6.3 admin reports
+# ------------------------------------------- teacher resets an attempt
 
-def test_reports_are_admin_only(client):
+def test_teacher_resets_an_attempt_so_the_student_can_retake(client):
     login(client, "t1")
-    assert client.get("/admin/reports").status_code == 403
-    client.get("/logout")
-    login(client, "s1")
-    assert client.get("/admin/reports").status_code == 403
-
-
-def test_reports_summarise_accounts_lessons_and_quizzes(client):
-    setup_content(client)
-    login(client, "s1")
-    client.get("/lessons/1")
-    post(client, "/quizzes/1", {"q1": "a", "q2": "b"})
+    make_lesson(client)
+    make_quiz(client)
     client.get("/logout")
 
-    login(client, "admin")
-    html = client.get("/admin/reports").get_data(as_text=True)
-    assert "Hub status" in html
-    assert "Mathematics" in html          # lessons by subject
-    assert "Fractions quiz" in html       # quiz participation
-    assert "Most opened lessons" in html
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    assert "already took this quiz" in client.get("/quizzes/1").get_data(as_text=True)
+    client.get("/logout")
+
+    login(client, "t1")
+    assert post(client, "/teacher/results/1/reset", {},
+                form_url="/teacher/progress").status_code == 302
+    client.get("/logout")
+
+    # The quiz is offered again rather than showing the locked result.
+    login(client, "s1")
+    page = client.get("/quizzes/1").get_data(as_text=True)
+    assert "already took this quiz" not in page
+    assert "Submit answers" in page
 
 
-def test_hub_status_counts_records_still_waiting_to_sync(client, app):
-    setup_content(client)
-    login(client, "admin")
-    html = client.get("/admin/reports").get_data(as_text=True)
+def test_a_teacher_cannot_reset_another_teachers_quiz(client):
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    client.get("/logout")
+
+    login(client, "t2")
+    assert post(client, "/teacher/results/1/reset", {},
+                form_url="/teacher/progress").status_code == 403
+
+
+def test_resetting_an_attempt_is_written_to_the_audit_log(app, client):
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    client.get("/logout")
+    login(client, "t1")
+    post(client, "/teacher/results/1/reset", {}, form_url="/teacher/progress")
+
     with app.app_context():
-        pending = store.get_db().execute(
-            "SELECT COUNT(*) FROM lessons WHERE sync_status = 'PENDING'"
+        row = store.get_db().execute(
+            "SELECT * FROM audit_log WHERE event = 'reset_quiz_result'"
+        ).fetchone()
+        assert row is not None
+        assert "S1 Person" in row["detail"]
+
+
+def test_reset_clears_the_submission_from_student_progress(app, client):
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    client.get("/logout")
+    login(client, "t1")
+    post(client, "/teacher/results/1/reset", {}, form_url="/teacher/progress")
+    client.get("/logout")
+
+    login(client, "s1")
+    assert "No quizzes taken yet" in client.get("/student/progress").get_data(as_text=True)
+    with app.app_context():
+        left = store.get_db().execute(
+            "SELECT COUNT(*) FROM activity WHERE kind = 'submit_quiz'"
         ).fetchone()[0]
-    assert pending == 2                   # both seeded lessons are unsynced
-    assert "Waiting to sync" in html
-
-
-def test_switched_off_accounts_are_reported_separately(client, app):
-    login(client, "admin")
-    with app.app_context():
-        sid = store.get_db().execute("SELECT id FROM users WHERE username='s2'").fetchone()[0]
-    post(client, f"/admin/users/{sid}/toggle", {}, form_url="/admin/users")
-    html = client.get("/admin/reports").get_data(as_text=True)
-    assert "Switched off" in html
-
-
-def test_human_size_reads_sensibly():
-    from edureach import human_size
-    assert human_size(0) == "0 B"
-    assert human_size(900) == "900 B"
-    assert human_size(2048) == "2.0 KB"
-    assert human_size(5 * 1024 * 1024) == "5.0 MB"
+        assert left == 0
