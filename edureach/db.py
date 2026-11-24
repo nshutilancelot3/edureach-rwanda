@@ -181,6 +181,66 @@ def _seed_demo_data(conn):
          "A verb is an action word: run, read, write.\n\n"
          "Example: 'The pupil reads a book.'  pupil and book are nouns; reads is a verb.",
          []),
+        ("Physical features of Rwanda", "Social Studies", "P6",
+         "Rwanda is called the land of a thousand hills because most of the country "
+         "is made up of hills and valleys.\n\n"
+         "Mountains: the Virunga range lies in the north west. Mount Karisimbi is the "
+         "highest point in Rwanda at 4,507 metres. Bisoke, Sabyinyo and Muhabura are "
+         "part of the same range.\n\n"
+         "Lakes: Lake Kivu in the west is the largest lake in Rwanda. Others are "
+         "Burera, Ruhondo, Muhazi and Ihema.\n\n"
+         "Rivers: the Nyabarongo is the longest river inside Rwanda. It joins other "
+         "rivers to form the Akagera, which flows east towards Lake Victoria.",
+         [("Which is the highest mountain in Rwanda?",
+           "Muhabura", "Karisimbi", "Bisoke", "Sabyinyo", "b"),
+          ("Which is the largest lake in Rwanda?",
+           "Lake Muhazi", "Lake Burera", "Lake Kivu", "Lake Ihema", "c"),
+          ("Which is the longest river inside Rwanda?",
+           "Akagera", "Nyabarongo", "Ruhondo", "Mukungwa", "b"),
+          ("Why is Rwanda called the land of a thousand hills?",
+           "It has many lakes", "It has many hills and valleys",
+           "It has many forests", "It has many rivers", "b")]),
+        ("Parts of a computer", "ICT", "P6",
+         "A computer has parts that work together.\n\n"
+         "Input devices put information into the computer. The keyboard lets you type "
+         "letters and numbers. The mouse lets you point and click.\n\n"
+         "The system unit holds the processor, often called the CPU. The CPU does the "
+         "thinking and is sometimes called the brain of the computer.\n\n"
+         "Output devices show you the result. The monitor displays what the computer "
+         "is doing. A printer puts the work on paper. Speakers play sound.\n\n"
+         "Storage keeps your work after the computer is switched off, for example a "
+         "hard disk or a flash disk.",
+         [("Which of these is an input device?",
+           "Monitor", "Printer", "Keyboard", "Speaker", "c"),
+          ("Which part is often called the brain of the computer?",
+           "The monitor", "The CPU", "The keyboard", "The mouse", "b"),
+          ("Which device shows you what the computer is doing?",
+           "The monitor", "The mouse", "The CPU", "The keyboard", "a"),
+          ("Where is your work kept after the computer is switched off?",
+           "In the mouse", "On the monitor", "On a hard disk or flash disk",
+           "In the keyboard", "c")]),
+        ("Writing in the past tense", "English", "P6",
+         "We use the past tense to talk about something that has already happened.\n\n"
+         "Most verbs are regular. We add -ed to the end:\n"
+         "   walk becomes walked\n"
+         "   play becomes played\n"
+         "   visit becomes visited\n\n"
+         "Some verbs are irregular. They change their whole form and must be learned:\n"
+         "   go becomes went\n"
+         "   eat becomes ate\n"
+         "   see becomes saw\n"
+         "   write becomes wrote\n\n"
+         "Example: Today I walk to school. Yesterday I walked to school.\n"
+         "Example: Today I go to the market. Yesterday I went to the market.",
+         [("What is the past tense of 'walk'?",
+           "walking", "walked", "walks", "walk", "b"),
+          ("What is the past tense of 'go'?",
+           "goed", "gone", "went", "going", "c"),
+          ("Which sentence is correct?",
+           "Yesterday I eat rice.", "Yesterday I ate rice.",
+           "Yesterday I eating rice.", "Yesterday I eats rice.", "b"),
+          ("Which of these verbs is irregular?",
+           "play", "visit", "write", "jump", "c")]),
     ]
 
     ids = {}
