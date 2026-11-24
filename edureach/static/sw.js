@@ -1,61 +1,50 @@
-// Service Worker for offline support
-const CACHE_NAME = 'edureach-v1';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/login',
-  '/static/style.css',
-  '/static/sw.js',
-];
+// Service Worker for complete offline support
+const CACHE_NAME = 'edureach-v2';
 
-// Install event - cache assets
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch(() => {
-        // Some assets might not exist yet, that's ok
-      });
-    })
-  );
+// Install - immediately become active
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
-// Activate event - clean old caches
+// Activate - take control of all pages
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((name) => {
-          if (name !== CACHE_NAME) {
-            return caches.delete(name);
-          }
-        })
-      );
-    })
-  );
-  self.clients.claim();
+  event.waitUntil(self.clients.claim());
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch - network first, cache fallback
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests
+  // Only handle GET requests
   if (event.request.method !== 'GET') {
     return;
   }
 
   event.respondWith(
-    caches.open(CACHE_NAME).then((cache) => {
-      return fetch(event.request)
-        .then((response) => {
-          // Cache successful responses
-          if (response && response.status === 200) {
+    // Try network first
+    fetch(event.request)
+      .then((response) => {
+        // Cache successful responses
+        if (response && response.status === 200) {
+          caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, response.clone());
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        // Network failed - try cache
+        return caches.match(event.request).then((cached) => {
+          if (cached) {
+            return cached;
           }
-          return response;
-        })
-        .catch(() => {
-          // Network failed, try cache
-          return cache.match(event.request);
+          // If not in cache and offline, return a generic offline page
+          if (event.request.destination === 'document') {
+            return new Response(
+              '<h1>Offline</h1><p>This page is not cached. Load it while online to use offline.</p>',
+              { status: 503, statusText: 'Service Unavailable', headers: { 'Content-Type': 'text/html' } }
+            );
+          }
+          return new Response('Offline', { status: 503 });
         });
-    })
+      })
   );
 });
