@@ -12,7 +12,7 @@
 // Bump on every change to the shell or the scripts below. Activation clears
 // the old caches, so devices pick the new code up on their next visit instead
 // of serving yesterday's app from cache indefinitely.
-var VERSION = 'v6';
+var VERSION = 'v7';
 var SHELL_CACHE = 'edureach-shell-' + VERSION;
 var FILE_CACHE = 'edureach-files-' + VERSION;
 
