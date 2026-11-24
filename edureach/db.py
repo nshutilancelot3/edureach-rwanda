@@ -119,68 +119,93 @@ def close_db(_exc=None):
 
 
 def init_db(path):
+    print(f"[DB] Initializing database at {path}")
     conn = connect(path)
     with conn:
+        print("[DB] Creating schema...")
         conn.executescript(SCHEMA)
+        print("[DB] Schema created")
+
         # Ensure demo accounts exist
         try:
             user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            print(f"[DB] User count: {user_count}")
             if user_count == 0:
+                print("[DB] Database empty - seeding demo data...")
                 _seed_demo_data(conn)
+                # Verify data was inserted
+                verify_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+                print(f"[DB] ✅ Seeding complete - {verify_count} users created")
+            else:
+                print(f"[DB] Database already has {user_count} users - skipping seed")
         except Exception as e:
-            print(f"[DB] Warning: Could not check/seed users: {e}")
+            print(f"[DB] ❌ ERROR during init: {e}")
+            import traceback
+            traceback.print_exc()
     conn.close()
+    print("[DB] Database initialization complete")
 
 
 def _seed_demo_data(conn):
     """Seed demo accounts and lessons."""
-    from werkzeug.security import generate_password_hash
+    try:
+        from werkzeug.security import generate_password_hash
 
-    users = [
-        ("admin", "admin123", "Hub Administrator", "admin", None, "en"),
-        ("teacher", "teach123", "Mukamana Claudine", "teacher", None, "en"),
-        ("student", "1234", "Ishimwe Eric", "student", "P6", "en"),
-    ]
+        users = [
+            ("admin", "admin123", "Hub Administrator", "admin", None, "en"),
+            ("teacher", "teach123", "Mukamana Claudine", "teacher", None, "en"),
+            ("student", "1234", "Ishimwe Eric", "student", "P6", "en"),
+        ]
 
-    ids = {}
-    for username, pw, name, role, grade, lang in users:
-        cur = conn.execute(
-            "INSERT INTO users (username, password_hash, full_name, role, grade, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (username, generate_password_hash(pw), name, role, grade, lang, now()),
-        )
-        ids[username] = cur.lastrowid
+        ids = {}
+        print(f"[SEED] Creating {len(users)} user accounts...")
+        for username, pw, name, role, grade, lang in users:
+            cur = conn.execute(
+                "INSERT INTO users (username, password_hash, full_name, role, grade, language, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (username, generate_password_hash(pw), name, role, grade, lang, now()),
+            )
+            ids[username] = cur.lastrowid
+            print(f"[SEED]   ✅ Created {username} ({role})")
 
-    # Add sample lessons
-    lessons = [
-        ("Fractions: adding and subtracting", "Mathematics", "P6",
-         "A fraction shows part of a whole.",
-         [("What is 2/7 + 3/7?", "5/7", "5/14", "6/7", "1/7", "a"),
-          ("Which number is the denominator in 3/8?", "3", "8", "11", "24", "b"),
-          ("What is 1/2 + 1/4?", "2/6", "1/6", "3/4", "2/4", "c")]),
-        ("The water cycle", "Science", "P6",
-         "Water moves around the Earth in a cycle.",
-         [("What makes water rise as vapour?", "Wind", "The sun's heat", "Cold air", "Rocks", "b"),
-          ("What do we call water falling as rain?", "Evaporation", "Condensation", "Precipitation", "Collection", "c")]),
-    ]
+        # Add sample lessons
+        lessons = [
+            ("Fractions: adding and subtracting", "Mathematics", "P6",
+             "A fraction shows part of a whole.",
+             [("What is 2/7 + 3/7?", "5/7", "5/14", "6/7", "1/7", "a"),
+              ("Which number is the denominator in 3/8?", "3", "8", "11", "24", "b"),
+              ("What is 1/2 + 1/4?", "2/6", "1/6", "3/4", "2/4", "c")]),
+            ("The water cycle", "Science", "P6",
+             "Water moves around the Earth in a cycle.",
+             [("What makes water rise as vapour?", "Wind", "The sun's heat", "Cold air", "Rocks", "b"),
+              ("What do we call water falling as rain?", "Evaporation", "Condensation", "Precipitation", "Collection", "c")]),
+        ]
 
-    for title, subject, grade, body, questions in lessons:
-        ts = now()
-        lesson_id = conn.execute(
-            "INSERT INTO lessons (teacher_id, title, subject, grade, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (ids["teacher"], title, subject, grade, body, ts, ts),
-        ).lastrowid
-        if questions:
-            quiz_id = conn.execute(
-                "INSERT INTO quizzes (lesson_id, teacher_id, title, created_at) VALUES (?, ?, ?, ?)",
-                (lesson_id, ids["teacher"], f"{title.split(':')[0]} quiz", ts),
+        print(f"[SEED] Creating {len(lessons)} lessons...")
+        for title, subject, grade, body, questions in lessons:
+            ts = now()
+            lesson_id = conn.execute(
+                "INSERT INTO lessons (teacher_id, title, subject, grade, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (ids["teacher"], title, subject, grade, body, ts, ts),
             ).lastrowid
-            for pos, (prompt, a, b, c, d, correct) in enumerate(questions, 1):
-                conn.execute(
-                    "INSERT INTO questions (quiz_id, position, prompt, option_a, option_b, option_c, option_d, correct) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (quiz_id, pos, prompt, a, b, c, d, correct),
-                )
+            if questions:
+                quiz_id = conn.execute(
+                    "INSERT INTO quizzes (lesson_id, teacher_id, title, created_at) VALUES (?, ?, ?, ?)",
+                    (lesson_id, ids["teacher"], f"{title.split(':')[0]} quiz", ts),
+                ).lastrowid
+                for pos, (prompt, a, b, c, d, correct) in enumerate(questions, 1):
+                    conn.execute(
+                        "INSERT INTO questions (quiz_id, position, prompt, option_a, option_b, option_c, option_d, correct) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (quiz_id, pos, prompt, a, b, c, d, correct),
+                    )
+            print(f"[SEED]   ✅ Created lesson: {title}")
 
-    print("[DB] ✅ Demo data seeded successfully")
+        print("[SEED] ✅ All demo data seeded successfully")
+
+    except Exception as e:
+        print(f"[SEED] ❌ ERROR during seeding: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 def log_event(db, user_id, event, detail):
