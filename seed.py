@@ -50,9 +50,15 @@ def main():
     app = create_app()
     with app.app_context():
         db = store.get_db()
-        if db.execute("SELECT COUNT(*) FROM users").fetchone()[0]:
-            print("Hub already has data; nothing to do.")
-            return
+        # Check if users table exists and has data
+        try:
+            user_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            if user_count > 0:
+                print("Hub already has data; nothing to do.")
+                return
+        except Exception as e:
+            # Table doesn't exist yet, that's fine - init_db will create it
+            pass
         with db:
             ids = {}
             for username, pw, name, role, grade, lang in USERS:
