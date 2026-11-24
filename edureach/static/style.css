@@ -6,6 +6,9 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+.sync-status { display: inline-block; font-size: 14px; padding: 4px 6px; border-radius: 3px; }
+.sync-status.online { color: var(--green); }
+.sync-status.offline { color: var(--red); }
 main { max-width: 960px; margin: 0 auto; padding: 16px; }
 h1 { font-size: 1.6rem; margin: 8px 0 12px; } h2 { font-size: 1.2rem; margin-top: 0; } h3 { margin: 0 0 8px; }
 a { color: var(--blue); }

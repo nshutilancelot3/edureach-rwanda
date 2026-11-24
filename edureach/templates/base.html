@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2d7d4e">
   <title>{% block title %}{{ t('app_name') }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -11,6 +12,7 @@
 <header class="top">
   <a class="brand" href="{{ url_for('home') }}">{{ icon('book', 22) }} {{ t('app_name') }}</a>
   <nav>
+    {% if g.user %}<span id="sync-status" class="sync-status online" title="Sync status">●</span>{% endif %}
     <a class="pill" href="{{ url_for('set_lang', code='rw' if lang == 'en' else 'en') }}">{{ icon('globe', 18) }} {{ t('language') }}</a>
     {% if g.user %}
       <form method="post" action="{{ url_for('logout') }}" class="inline">
@@ -42,12 +44,9 @@
   {% block content %}{% endblock %}
 </main>
 <footer class="foot">{{ icon('wifi-off', 16) }} Works offline on the school network</footer>
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/static/sw.js').catch(err => {
-    console.log('Service Worker registration failed:', err);
-  });
-}
-</script>
+{% if g.user %}
+<script src="{{ url_for('static', filename='offline-db.js') }}"></script>
+<script src="{{ url_for('static', filename='offline-sync.js') }}"></script>
+{% endif %}
 </body>
 </html>

@@ -557,6 +557,76 @@ def _register_routes(app):
         avg = round(sum(100 * r["score"] / r["total"] for r in results) / len(results)) if results else None
         return render_template("student/progress.html", results=results, opened=opened, avg=avg)
 
+    # ---------------------------------------------------------- offline sync API
+    @app.route("/api/data/users")
+    @login_required()
+    def api_data_users():
+        db = store.get_db()
+        users = db.execute("SELECT id, username, full_name, role FROM users WHERE active = 1").fetchall()
+        return [dict(u) for u in users]
+
+    @app.route("/api/data/lessons")
+    @login_required()
+    def api_data_lessons():
+        db = store.get_db()
+        lessons = db.execute("SELECT * FROM lessons").fetchall()
+        return [dict(l) for l in lessons]
+
+    @app.route("/api/data/quizzes")
+    @login_required()
+    def api_data_quizzes():
+        db = store.get_db()
+        quizzes = db.execute("SELECT * FROM quizzes").fetchall()
+        return [dict(q) for q in quizzes]
+
+    @app.route("/api/data/questions")
+    @login_required()
+    def api_data_questions():
+        db = store.get_db()
+        questions = db.execute("SELECT * FROM questions").fetchall()
+        return [dict(q) for q in questions]
+
+    @app.route("/api/data/quiz-results")
+    @login_required()
+    def api_data_quiz_results():
+        db = store.get_db()
+        results = db.execute("SELECT * FROM quiz_results WHERE student_id = ?", (g.user["id"],)).fetchall()
+        return [dict(r) for r in results]
+
+    @app.route("/api/sync/<table>/<int:record_id>", methods=["POST"])
+    @login_required()
+    def api_sync(table, record_id):
+        data = request.get_json()
+        operation = data.get("operation")
+        record_data = data.get("data")
+
+        db = store.get_db()
+
+        try:
+            if operation == "create":
+                # Insert new record
+                columns = list(record_data.keys())
+                placeholders = ["?" for _ in columns]
+                sql = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join(placeholders)})"
+                values = [record_data[col] for col in columns]
+                db.execute(sql, values)
+                db.commit()
+            elif operation == "update":
+                # Update existing record
+                sets = [f"{k}=?" for k in record_data.keys()]
+                values = list(record_data.values()) + [record_id]
+                sql = f"UPDATE {table} SET {','.join(sets)} WHERE id=?"
+                db.execute(sql, values)
+                db.commit()
+            elif operation == "delete":
+                # Delete record
+                db.execute(f"DELETE FROM {table} WHERE id=?", (record_id,))
+                db.commit()
+
+            return {"success": True}, 200
+        except Exception as e:
+            return {"error": str(e)}, 400
+
     @app.errorhandler(403)
     def forbidden(_e):
         return render_template("error.html", code=403, message="You don't have access to that page."), 403
