@@ -2,6 +2,7 @@
 import json
 import os
 import secrets
+from datetime import timedelta
 from functools import wraps
 
 from flask import (
@@ -12,7 +13,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 from . import db as store
-from .i18n import SUPPORTED, translate
+from .i18n import STRINGS, SUPPORTED, translate
 
 ALLOWED_FILES = {"pdf", "png", "jpg", "jpeg", "mp4", "pptx", "txt"}
 SUBJECTS = ["Mathematics", "English", "Kinyarwanda", "Science", "Social Studies", "ICT"]
@@ -30,95 +31,24 @@ def create_app(test_config=None):
         MAX_CONTENT_LENGTH=50 * 1024 * 1024,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        # A shared classroom tablet gets closed and reopened constantly, often
+        # with no connection in between. A session cookie would log the pupil
+        # out on every restart, so the sign-in is kept for a school term.
+        PERMANENT_SESSION_LIFETIME=timedelta(days=90),
     )
     if test_config:
         app.config.update(test_config)
     if not app.config.get("SECRET_KEY"):
         app.config["SECRET_KEY"] = os.environ.get("EDUREACH_SECRET_KEY") or _load_secret(app.instance_path)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-    store.init_db(app.config["DATABASE"])
+    # A fresh hub seeds itself with the demo accounts so a new deployment is
+    # usable immediately. Tests bring their own fixtures, so they opt out.
+    store.init_db(app.config["DATABASE"], seed=not app.config.get("TESTING"))
     app.teardown_appcontext(store.close_db)
-
-    # Auto-seed demo data if database is empty
-    with app.app_context():
-        db = store.get_db()
-        try:
-            user_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-            if user_count == 0:
-                print("[INIT] Database empty - loading demo data...")
-                _load_demo_data(db)
-                print("[INIT] Demo data loaded successfully")
-            else:
-                print(f"[INIT] Database has {user_count} users - skipping seed")
-        except Exception as e:
-            print(f"[INIT] Error checking users: {e}")
-            try:
-                print("[INIT] Attempting to load demo data despite error...")
-                _load_demo_data(db)
-                print("[INIT] Demo data loaded")
-            except Exception as e2:
-                print(f"[INIT] Failed to load demo data: {e2}")
 
     _register_helpers(app)
     _register_routes(app)
     return app
-
-
-def _load_demo_data(db):
-    """Load demo accounts and lessons on first startup."""
-    try:
-        USERS = [
-            ("admin", "admin123", "Hub Administrator", "admin", None, "en"),
-            ("teacher", "teach123", "Mukamana Claudine", "teacher", None, "en"),
-            ("student", "1234", "Ishimwe Eric", "student", "P6", "en"),
-        ]
-
-        LESSONS = [
-            ("Fractions: adding and subtracting", "Mathematics", "P6",
-             "A fraction shows part of a whole. The top number is the numerator and the bottom number is the denominator.\n\n"
-             "To add fractions with the same denominator, add the numerators and keep the denominator:\n"
-             "   2/7 + 3/7 = 5/7",
-             [("What is 2/7 + 3/7?", "5/7", "5/14", "6/7", "1/7", "a"),
-              ("Which number is the denominator in 3/8?", "3", "8", "11", "24", "b"),
-              ("What is 1/2 + 1/4?", "2/6", "1/6", "3/4", "2/4", "c")]),
-            ("The water cycle", "Science", "P6",
-             "Water moves around the Earth in a cycle.\n\n"
-             "1. Evaporation: the sun heats water in lakes and rivers, and it rises as vapour.\n"
-             "2. Condensation: the vapour cools and forms clouds.\n"
-             "3. Precipitation: water falls back as rain.\n"
-             "4. Collection: rain gathers in rivers, lakes and underground, and the cycle starts again.",
-             [("What makes water rise as vapour?", "Wind", "The sun's heat", "Cold air", "Rocks", "b"),
-              ("What do we call water falling as rain?", "Evaporation", "Condensation", "Precipitation", "Collection", "c")]),
-        ]
-
-        ids = {}
-        with db:
-            for username, pw, name, role, grade, lang in USERS:
-                cur = db.execute(
-                    "INSERT INTO users (username, password_hash, full_name, role, grade, language, created_at)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (username, generate_password_hash(pw), name, role, grade, lang, store.now()),
-                )
-                ids[username] = cur.lastrowid
-
-            for title, subject, grade, body, questions in LESSONS:
-                ts = store.now()
-                lesson_id = db.execute(
-                    "INSERT INTO lessons (teacher_id, title, subject, grade, body, created_at, updated_at)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?)", (ids["teacher"], title, subject, grade, body, ts, ts),
-                ).lastrowid
-                if questions:
-                    quiz_id = db.execute(
-                        "INSERT INTO quizzes (lesson_id, teacher_id, title, created_at) VALUES (?, ?, ?, ?)",
-                        (lesson_id, ids["teacher"], f"{title.split(':')[0]} quiz", ts),
-                    ).lastrowid
-                    for pos, (prompt, a, b, c, d, correct) in enumerate(questions, 1):
-                        db.execute(
-                            "INSERT INTO questions (quiz_id, position, prompt, option_a, option_b, option_c, option_d, correct)"
-                            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (quiz_id, pos, prompt, a, b, c, d, correct),
-                        )
-    except Exception as e:
-        print(f"Demo data already loaded or error: {e}")
 
 
 def _load_secret(instance_path):
@@ -146,9 +76,17 @@ def _register_helpers(app):
             g.user = user
         g.lang = session.get("lang") or (g.user["language"] if g.user else "en")
         if request.method == "POST":
-            token = session.get("csrf")
-            if not token or token != request.form.get("csrf"):
-                abort(400)
+            if request.path.startswith("/api/"):
+                # The sync endpoint posts JSON, so it carries no form token.
+                # SameSite=Lax already stops another site sending our cookie on
+                # a cross-site POST; requiring a custom header on top of that
+                # means a hostile page would need a CORS preflight we never allow.
+                if request.headers.get("X-EduReach-Sync") != "1":
+                    abort(400)
+            else:
+                token = session.get("csrf")
+                if not token or token != request.form.get("csrf"):
+                    abort(400)
 
     @app.context_processor
     def inject():
@@ -238,6 +176,7 @@ def _register_routes(app):
             else:
                 lang = session.get("lang", user["language"])
                 session.clear()
+                session.permanent = True      # survives closing the browser
                 session["user_id"] = user["id"]
                 session["lang"] = lang
                 return redirect(url_for("home"))
@@ -557,75 +496,175 @@ def _register_routes(app):
         avg = round(sum(100 * r["score"] / r["total"] for r in results) / len(results)) if results else None
         return render_template("student/progress.html", results=results, opened=opened, avg=avg)
 
-    # ---------------------------------------------------------- offline sync API
-    @app.route("/api/data/users")
-    @login_required()
-    def api_data_users():
-        db = store.get_db()
-        users = db.execute("SELECT id, username, full_name, role FROM users WHERE active = 1").fetchall()
-        return jsonify([dict(u) for u in users])
+    # ------------------------------------------------------- offline support
+    @app.route("/sw.js")
+    def service_worker():
+        """Served from the root so the worker's scope covers the whole site.
+        A worker living under /static/ could only control /static/."""
+        response = send_from_directory(
+            os.path.join(app.static_folder, "js"), "sw.js", mimetype="text/javascript"
+        )
+        response.headers["Cache-Control"] = "no-cache"
+        response.headers["Service-Worker-Allowed"] = "/"
+        return response
 
-    @app.route("/api/data/lessons")
-    @login_required()
-    def api_data_lessons():
-        db = store.get_db()
-        lessons = db.execute("SELECT * FROM lessons").fetchall()
-        return jsonify([dict(l) for l in lessons])
+    @app.route("/offline-shell")
+    def offline_shell():
+        """The page the worker falls back to when the hub is unreachable.
+        Renders no user data — shell.js rebuilds the screen from IndexedDB."""
+        config = json.dumps({
+            "strings": STRINGS,
+            "subjects": SUBJECTS,
+            "grades": GRADES,
+        })
+        response = app.make_response(render_template("offline_shell.html", config_json=config))
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
-    @app.route("/api/data/quizzes")
-    @login_required()
-    def api_data_quizzes():
+    @app.route("/api/ping")
+    def api_ping():
+        """Cheap reachability check. The browser's navigator.onLine only proves
+        a link exists, not that this hub answers."""
+        return jsonify({"ok": True, "time": store.now()})
+
+    @app.route("/api/bootstrap")
+    def api_bootstrap():
+        """Everything the signed-in user needs to work with no network."""
+        if g.user is None:
+            return jsonify({"error": "signed out"}), 401
         db = store.get_db()
+        uid, role = g.user["id"], g.user["role"]
+
+        lessons = db.execute(
+            "SELECT l.*, u.full_name AS teacher FROM lessons l"
+            " JOIN users u ON u.id = l.teacher_id ORDER BY l.subject, l.title"
+        ).fetchall()
         quizzes = db.execute("SELECT * FROM quizzes").fetchall()
-        return jsonify([dict(q) for q in quizzes])
 
-    @app.route("/api/data/questions")
-    @login_required()
-    def api_data_questions():
+        # The answer key travels to the device on purpose: FR 3.3 requires a
+        # quiz to be marked instantly with no connection, which is only
+        # possible if the device holds the correct answers.
+        questions = db.execute("SELECT * FROM questions ORDER BY quiz_id, position").fetchall()
+
+        if role == "teacher":
+            results = db.execute(
+                "SELECT r.* FROM quiz_results r JOIN quizzes q ON q.id = r.quiz_id"
+                " WHERE q.teacher_id = ?", (uid,)
+            ).fetchall()
+            opened = 0
+        else:
+            results = db.execute("SELECT * FROM quiz_results WHERE student_id = ?", (uid,)).fetchall()
+            opened = db.execute(
+                "SELECT COUNT(DISTINCT lesson_id) FROM activity"
+                " WHERE student_id = ? AND kind = 'view_lesson'", (uid,)
+            ).fetchone()[0]
+
+        return jsonify({
+            "user": {
+                "id": uid, "username": g.user["username"], "full_name": g.user["full_name"],
+                "role": role, "grade": g.user["grade"], "language": g.user["language"],
+            },
+            "lessons": [dict(r) for r in lessons],
+            "quizzes": [dict(r) for r in quizzes],
+            "questions": [dict(r) for r in questions],
+            "results": [dict(r) for r in results],
+            "counts": {"lessons_opened": opened},
+            "server_time": store.now(),
+        })
+
+    def _sync_quiz_result(db, uid, payload):
+        """Replay one offline quiz submission. Idempotent on client_uuid, and
+        it never overwrites a result the hub already locked in."""
+        uuid = payload.get("client_uuid")
+        quiz_id = payload.get("quiz_id")
+        if not uuid or not quiz_id:
+            return "failed", "missing client_uuid or quiz_id"
+
+        if db.execute("SELECT 1 FROM quiz_results WHERE client_uuid = ?", (uuid,)).fetchone():
+            return "duplicate", None
+        # FR 3.3: one locked result per student per quiz. If the hub already has
+        # one, the offline attempt loses — but the student's copy is kept on the
+        # device, so nothing is silently destroyed.
+        if db.execute(
+            "SELECT 1 FROM quiz_results WHERE quiz_id = ? AND student_id = ?", (quiz_id, uid)
+        ).fetchone():
+            return "duplicate", None
+
+        quiz = db.execute("SELECT * FROM quizzes WHERE id = ?", (quiz_id,)).fetchone()
+        if quiz is None:
+            return "failed", "that quiz no longer exists on the hub"
+
+        # Re-mark on the hub rather than trusting a score sent by the browser.
+        questions = db.execute(
+            "SELECT * FROM questions WHERE quiz_id = ? ORDER BY position", (quiz_id,)
+        ).fetchall()
+        answers = payload.get("answers") or {}
+        score = sum(1 for qn in questions if answers.get(str(qn["id"])) == qn["correct"])
+
+        db.execute(
+            "INSERT INTO quiz_results (quiz_id, student_id, score, total, answers, submitted_at, client_uuid)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (quiz_id, uid, score, len(questions), json.dumps(answers),
+             payload.get("submitted_at") or store.now(), uuid),
+        )
+        db.execute(
+            "INSERT INTO activity (student_id, kind, quiz_id, lesson_id, at, client_uuid)"
+            " VALUES (?, 'submit_quiz', ?, ?, ?, ?)",
+            (uid, quiz_id, quiz["lesson_id"], payload.get("submitted_at") or store.now(), uuid + "-act"),
+        )
+        return "applied", None
+
+    def _sync_activity(db, uid, payload):
+        uuid = payload.get("client_uuid")
+        if not uuid:
+            return "failed", "missing client_uuid"
+        if db.execute("SELECT 1 FROM activity WHERE client_uuid = ?", (uuid,)).fetchone():
+            return "duplicate", None
+        kind = payload.get("kind")
+        if kind not in ("view_lesson", "submit_quiz"):
+            return "failed", "unknown activity kind"
+        db.execute(
+            "INSERT INTO activity (student_id, kind, lesson_id, quiz_id, at, client_uuid)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (uid, kind, payload.get("lesson_id"), payload.get("quiz_id"),
+             payload.get("at") or store.now(), uuid),
+        )
+        return "applied", None
+
+    @app.route("/api/sync", methods=["POST"])
+    def api_sync():
+        """Replay the device's outbox. Each item is reported on separately so a
+        single bad record cannot block the rest, and the device only clears an
+        item this hub has confirmed."""
+        if g.user is None:
+            return jsonify({"error": "signed out"}), 401
+
+        body = request.get_json(silent=True) or {}
+        items = body.get("items") or []
+        if not isinstance(items, list):
+            return jsonify({"error": "items must be a list"}), 400
+
         db = store.get_db()
-        questions = db.execute("SELECT * FROM questions").fetchall()
-        return jsonify([dict(q) for q in questions])
+        uid = g.user["id"]
+        out = []
 
-    @app.route("/api/data/quiz-results")
-    @login_required()
-    def api_data_quiz_results():
-        db = store.get_db()
-        results = db.execute("SELECT * FROM quiz_results WHERE student_id = ?", (g.user["id"],)).fetchall()
-        return jsonify([dict(r) for r in results])
+        for item in items[:200]:
+            uuid = item.get("uuid")
+            entity = item.get("entity")
+            payload = item.get("payload") or {}
+            try:
+                with db:  # each item commits on its own
+                    if entity == "quiz_result":
+                        status, error = _sync_quiz_result(db, uid, payload)
+                    elif entity == "activity":
+                        status, error = _sync_activity(db, uid, payload)
+                    else:
+                        status, error = "failed", f"unknown entity {entity!r}"
+            except Exception as exc:                      # noqa: BLE001 — reported per item
+                status, error = "failed", str(exc)
+            out.append({"uuid": uuid, "status": status, "error": error})
 
-    @app.route("/api/sync/<table>/<int:record_id>", methods=["POST"])
-    @login_required()
-    def api_sync(table, record_id):
-        data = request.get_json()
-        operation = data.get("operation")
-        record_data = data.get("data")
-
-        db = store.get_db()
-
-        try:
-            if operation == "create":
-                # Insert new record
-                columns = list(record_data.keys())
-                placeholders = ["?" for _ in columns]
-                sql = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join(placeholders)})"
-                values = [record_data[col] for col in columns]
-                db.execute(sql, values)
-                db.commit()
-            elif operation == "update":
-                # Update existing record
-                sets = [f"{k}=?" for k in record_data.keys()]
-                values = list(record_data.values()) + [record_id]
-                sql = f"UPDATE {table} SET {','.join(sets)} WHERE id=?"
-                db.execute(sql, values)
-                db.commit()
-            elif operation == "delete":
-                # Delete record
-                db.execute(f"DELETE FROM {table} WHERE id=?", (record_id,))
-                db.commit()
-
-            return jsonify({"success": True}), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
+        return jsonify({"results": out, "server_time": store.now()})
 
     @app.errorhandler(403)
     def forbidden(_e):

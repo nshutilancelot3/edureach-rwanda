@@ -31,6 +31,7 @@ The app works completely offline. Try logging in, opening a lesson, and taking a
 | FR 4.2 Student sees own quiz history and average | Done |
 | FR 4.3 Teacher sees class results on their own quizzes | Done |
 | FR 6.1 Admin switches accounts on/off | Done |
+| NFR 1 Works with no internet connection (installable PWA, offline shell, IndexedDB) | Done |
 | NFR 3 English / Kinyarwanda toggle (student screens) | In progress |
 | NFR 6 Power-cut safety (SQLite WAL + synchronous=FULL, atomic file writes) | Done |
 | NFR 9 Log of uploads and account changes | Done |
@@ -51,13 +52,72 @@ Open http://localhost:5000. Other devices on the same Wi-Fi use `http://<hub-ip>
 
 Demo logins: `admin / admin123`, `teacher / teach123`, `student / 1234` (P6). Change these before a real pilot.
 
+## Working offline
+
+EduReach is an installable PWA. Once you have signed in with a connection
+available, the device keeps working with none.
+
+**How to check it yourself**
+
+1. Open the app and sign in while connected. The header shows **Online**.
+2. Open any lesson once so the service worker finishes installing.
+3. Cut the connection — switch off Wi-Fi, or stop the server entirely.
+4. Reload the page. It still opens. The header now shows **Offline**.
+5. Browse lessons, filter by subject and grade, and search. Open a lesson you
+   have **never** opened before — it still works.
+6. Take a quiz. It is marked instantly and the score is saved on the device.
+7. Close the browser completely, reopen it, still offline. Your result is there,
+   and *My progress* lists it tagged `PENDING`.
+8. Reconnect. The badge returns to **Online**, the pending counter falls to zero,
+   and the result appears on the hub for the teacher.
+
+**How it works**
+
+A service worker precaches an *application shell*. When a page request cannot
+reach the hub, the shell is served instead and rebuilds the screen from
+IndexedDB using the same markup and CSS as the server templates. Because it
+routes on the URL rather than replaying a cached response, lessons and quizzes
+that were never visited still open — caching visited pages alone could not do
+that, and a quiz submission is a `POST`, which can never come from a cache.
+
+Work done offline is appended to an outbox. When the hub answers again the
+outbox is replayed; each item carries a `client_uuid`, so a sync that fails
+half-way is safe to retry without creating duplicates. An item is removed from
+the device only after the hub confirms it, and a failed sync never deletes
+local data.
+
+Quizzes are re-marked on the hub rather than trusting the score the browser
+reports. If a result already exists for that student and quiz, the hub keeps it
+(FR 3.3 locks results) and reports the late submission as a duplicate.
+
+**What still needs a connection**
+
+- Signing in for the first time on a device, and creating accounts.
+- Uploading a lesson file, creating or editing lessons and quizzes.
+- A teacher's class results, which live on the hub.
+
+Each is reported in the interface rather than failing silently.
+
+**A note on the answer key**
+
+Marking a quiz with no connection is only possible if the device holds the
+correct answers, so the bootstrap sends them. This is inherent to the offline
+requirement (FR 3.3) rather than an oversight; a determined pupil could read
+them from browser storage. On the real deployment the hub is a device kept by
+the teacher, which limits the exposure.
+
 ## Tests
 
 ```bash
 pytest
 ```
 
-20 tests cover login and roles, CSRF protection, account creation and switching off, lesson upload and file-type checks, teacher ownership, quiz answer keys, browse/search, auto-marking and result locking, progress views, the language toggle, and power-cut safety.
+32 tests cover login and roles, CSRF protection, account creation and switching
+off, lesson upload and file-type checks, teacher ownership, quiz answer keys,
+browse/search, auto-marking and result locking, progress views, the language
+toggle, power-cut safety, and the offline layer — service worker scope, the
+shell carrying no user data, bootstrap contents, sync idempotency, locked
+results surviving a late sync, and one bad outbox item not blocking the rest.
 
 ## Stack
 

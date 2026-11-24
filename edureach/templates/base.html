@@ -4,15 +4,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#2d7d4e">
+  <meta name="theme-color" content="#1f7a4d">
   <title>{% block title %}{{ t('app_name') }}{% endblock %}</title>
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <header class="top">
   <a class="brand" href="{{ url_for('home') }}">{{ icon('book', 22) }} {{ t('app_name') }}</a>
   <nav>
-    {% if g.user %}<span id="sync-status" class="sync-status online" title="Sync status">●</span>{% endif %}
+    {# sync.js inserts the online/offline indicator here #}
     <a class="pill" href="{{ url_for('set_lang', code='rw' if lang == 'en' else 'en') }}">{{ icon('globe', 18) }} {{ t('language') }}</a>
     {% if g.user %}
       <form method="post" action="{{ url_for('logout') }}" class="inline">
@@ -44,9 +47,10 @@
   {% block content %}{% endblock %}
 </main>
 <footer class="foot">{{ icon('wifi-off', 16) }} Works offline on the school network</footer>
+<script src="{{ url_for('static', filename='js/ui.js') }}"></script>
 {% if g.user %}
-<script src="{{ url_for('static', filename='offline-db.js') }}"></script>
-<script src="{{ url_for('static', filename='offline-sync.js') }}"></script>
+<script src="{{ url_for('static', filename='js/db.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sync.js') }}"></script>
 {% endif %}
 </body>
 </html>

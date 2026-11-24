@@ -247,3 +247,155 @@ def test_failed_write_leaves_no_partial_result(app):
                 db.execute("INSERT INTO activity (student_id, kind, at) VALUES (4, 'view_lesson', 'x')")
                 raise RuntimeError("power cut")
         assert db.execute("SELECT COUNT(*) FROM activity").fetchone()[0] == 0
+
+
+# ------------------------------------------------- offline-first support
+
+SYNC_HEADERS = {"X-EduReach-Sync": "1"}
+
+
+def seed_quiz(client):
+    """A teacher's lesson + quiz, ready for a student to take."""
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+
+
+def test_service_worker_is_served_from_the_root(client):
+    """Scope matters: a worker under /static/ could only control /static/."""
+    res = client.get("/sw.js")
+    assert res.status_code == 200
+    assert res.headers["Service-Worker-Allowed"] == "/"
+    assert "text/javascript" in res.headers["Content-Type"]
+
+
+def test_offline_shell_carries_no_user_data(client):
+    """The shell is cached once and reused by everyone, so it must not bake in
+    whoever happened to be signed in when it was fetched."""
+    login(client, "s1")
+    html = client.get("/offline-shell").get_data(as_text=True)
+    assert "S1 Person" not in html
+    assert 'id="shell-config"' in html
+    assert "Mathematics" in html  # subject list for the offline filters
+
+
+def test_ping_is_reachable_without_signing_in(client):
+    assert client.get("/api/ping").get_json()["ok"] is True
+
+
+def test_bootstrap_requires_a_session(client):
+    assert client.get("/api/bootstrap").status_code == 401
+
+
+def test_bootstrap_sends_everything_needed_to_work_offline(client):
+    seed_quiz(client)
+    login(client, "s1")
+    data = client.get("/api/bootstrap").get_json()
+    assert data["user"]["username"] == "s1"
+    assert len(data["lessons"]) == 1
+    assert len(data["questions"]) == 2
+    # The answer key has to travel so the device can mark a quiz with no network.
+    assert all("correct" in q for q in data["questions"])
+
+
+def test_sync_rejects_a_cross_site_post(client):
+    """Without the custom header a hostile page could ride the session cookie."""
+    login(client, "s1")
+    assert client.post("/api/sync", json={"items": []}).status_code == 400
+
+
+def test_offline_quiz_submission_syncs_and_is_marked_by_the_hub(client):
+    seed_quiz(client)
+    login(client, "s1")
+    quiz_id = 1
+    item = {
+        "uuid": "test-uuid-1",
+        "entity": "quiz_result",
+        "op": "create",
+        "payload": {
+            "client_uuid": "test-uuid-1",
+            "quiz_id": quiz_id,
+            "score": 99,                      # the browser's score is not trusted
+            "total": 2,
+            "answers": {"1": "a", "2": "a"},  # q1 right, q2 wrong -> 1 of 2
+            "submitted_at": "2026-01-01T00:00:00+00:00",
+        },
+    }
+    res = client.post("/api/sync", json={"items": [item]}, headers=SYNC_HEADERS)
+    assert res.get_json()["results"][0]["status"] == "applied"
+
+    saved = client.get("/api/bootstrap").get_json()["results"]
+    assert len(saved) == 1
+    assert saved[0]["score"] == 1             # re-marked on the hub, not 99
+    assert saved[0]["client_uuid"] == "test-uuid-1"
+
+
+def test_replaying_the_outbox_never_duplicates_a_result(client):
+    """A sync that fails after the hub committed must be safe to retry."""
+    seed_quiz(client)
+    login(client, "s1")
+    item = {
+        "uuid": "test-uuid-2", "entity": "quiz_result", "op": "create",
+        "payload": {"client_uuid": "test-uuid-2", "quiz_id": 1, "total": 2,
+                    "answers": {"1": "a", "2": "a"}, "submitted_at": "2026-01-01T00:00:00+00:00"},
+    }
+    first = client.post("/api/sync", json={"items": [item]}, headers=SYNC_HEADERS)
+    second = client.post("/api/sync", json={"items": [item]}, headers=SYNC_HEADERS)
+
+    assert first.get_json()["results"][0]["status"] == "applied"
+    assert second.get_json()["results"][0]["status"] == "duplicate"
+    assert len(client.get("/api/bootstrap").get_json()["results"]) == 1
+
+
+def test_a_locked_result_is_never_overwritten_by_a_late_sync(client):
+    """FR 3.3 locks a result once submitted. An offline attempt that arrives
+    afterwards is reported as duplicate rather than replacing it."""
+    seed_quiz(client)
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})   # online, scores 1
+    online_score = client.get("/api/bootstrap").get_json()["results"][0]["score"]
+
+    late = {
+        "uuid": "test-uuid-3", "entity": "quiz_result", "op": "create",
+        "payload": {"client_uuid": "test-uuid-3", "quiz_id": 1, "total": 2,
+                    "answers": {"1": "a", "2": "b"}, "submitted_at": "2026-01-01T00:00:00+00:00"},
+    }
+    res = client.post("/api/sync", json={"items": [late]}, headers=SYNC_HEADERS)
+    assert res.get_json()["results"][0]["status"] == "duplicate"
+
+    results = client.get("/api/bootstrap").get_json()["results"]
+    assert len(results) == 1
+    assert results[0]["score"] == online_score
+
+
+def test_one_bad_item_does_not_block_the_rest_of_the_outbox(client):
+    seed_quiz(client)
+    login(client, "s1")
+    items = [
+        {"uuid": "bad", "entity": "quiz_result", "op": "create",
+         "payload": {"client_uuid": "bad", "quiz_id": 9999, "answers": {}}},
+        {"uuid": "good", "entity": "activity", "op": "create",
+         "payload": {"client_uuid": "good", "kind": "view_lesson", "lesson_id": 1,
+                     "at": "2026-01-01T00:00:00+00:00"}},
+    ]
+    results = client.post("/api/sync", json={"items": items}, headers=SYNC_HEADERS).get_json()["results"]
+    by_uuid = {r["uuid"]: r for r in results}
+    assert by_uuid["bad"]["status"] == "failed"
+    assert by_uuid["good"]["status"] == "applied"
+
+
+def test_offline_lesson_views_sync_into_progress(client):
+    seed_quiz(client)
+    login(client, "s1")
+    item = {"uuid": "view-1", "entity": "activity", "op": "create",
+            "payload": {"client_uuid": "view-1", "kind": "view_lesson", "lesson_id": 1,
+                        "at": "2026-01-01T00:00:00+00:00"}}
+    client.post("/api/sync", json={"items": [item]}, headers=SYNC_HEADERS)
+    assert client.get("/api/bootstrap").get_json()["counts"]["lessons_opened"] == 1
+
+
+def test_password_field_gets_a_reveal_control(client):
+    """The eye toggle is attached by ui.js, which must load on the login page."""
+    html = client.get("/login").get_data(as_text=True)
+    assert "js/ui.js" in html

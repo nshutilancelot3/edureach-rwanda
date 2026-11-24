@@ -6,9 +6,28 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
-.sync-status { display: inline-block; font-size: 14px; padding: 4px 6px; border-radius: 3px; }
-.sync-status.online { color: var(--green); }
-.sync-status.offline { color: var(--red); }
+
+/* Connection + sync indicator, injected into the header by sync.js. */
+.netpill { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 6px 12px;
+  border-radius: 999px; font-size: .85rem; font-weight: 600; white-space: nowrap;
+  background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.35); }
+.netdot { width: 9px; height: 9px; border-radius: 50%; background: #8ff0b5; flex: none; }
+.netpill[data-state="offline"] { background: rgba(0,0,0,.26); border-color: rgba(255,255,255,.5); }
+.netpill[data-state="offline"] .netdot { background: #ffd27a; }
+.netpill[data-state="syncing"] .netdot { background: #fff; }
+.netbadge { background: #fff; color: var(--green); border-radius: 999px; padding: 0 7px;
+  font-size: .75rem; font-weight: 700; line-height: 1.5; }
+.netbadge[hidden] { display: none; }
+.offline-note { background: var(--amber-soft); color: var(--amber); display: flex; align-items: center; gap: 8px; }
+
+/* Show/hide control on password fields. */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { padding-right: 52px; }
+.pw-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  background: none; border: 0; color: var(--muted); padding: 0; width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 8px; }
+.pw-toggle:hover { color: var(--ink); }
+.pw-toggle:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
 main { max-width: 960px; margin: 0 auto; padding: 16px; }
 h1 { font-size: 1.6rem; margin: 8px 0 12px; } h2 { font-size: 1.2rem; margin-top: 0; } h3 { margin: 0 0 8px; }
 a { color: var(--blue); }

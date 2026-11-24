@@ -1,0 +1,36 @@
+{# Offline application shell.
+
+   The service worker precaches this page and serves it for any navigation it
+   cannot reach the hub for. It deliberately renders no user-specific markup:
+   everything below the header is rebuilt by shell.js from IndexedDB, so a copy
+   cached while one person was signed in can never leak into another's session.
+#}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1f7a4d">
+  <title>EduReach Rwanda</title>
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="top">
+  <a class="brand" id="shell-brand" href="/">EduReach Rwanda</a>
+  <nav></nav>
+</header>
+<nav class="tabs" id="shell-tabs" hidden></nav>
+<main id="shell-main">
+  <p class="muted">Loading your saved lessons…</p>
+</main>
+<footer class="foot">Works offline on the school network</footer>
+
+<script id="shell-config" type="application/json">{{ config_json|safe }}</script>
+<script src="{{ url_for('static', filename='js/db.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sync.js') }}"></script>
+<script src="{{ url_for('static', filename='js/shell.js') }}"></script>
+</body>
+</html>
