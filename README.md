@@ -6,7 +6,7 @@ Built from the EduReach Rwanda SRS v1.0 (Lancelot Nshuti, ALU). This is **increm
 
 ## 🌐 Live Demo
 
-**Try it now**: https://edureach-rwanda-production.up.railway.app
+**Try it now**: https://edureach-rwanda.onrender.com
 
 Demo accounts:
 - **Student**: username `student`, password `1234` (P6 class)
@@ -65,9 +65,9 @@ Python 3 + Flask, SQLite, server-rendered HTML with almost no JavaScript, and no
 
 ## Deploy to production
 
-**Currently deployed on Railway**: https://edureach-rwanda-production.up.railway.app
+**Currently deployed on Render**: https://edureach-rwanda.onrender.com
 
-To deploy your own instance, use Railway in one click:
+To deploy your own instance, use Render:
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new?template=https://github.com/nshutilancelot3/edureach-rwanda)
 
