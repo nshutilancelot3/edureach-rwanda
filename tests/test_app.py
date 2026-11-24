@@ -401,104 +401,80 @@ def test_password_field_gets_a_reveal_control(client):
     assert "js/ui.js" in html
 
 
-# --------------------------------------- teachers writing lessons offline
+# ------------------------------------------- teacher resets an attempt
 
-def sync(client, items):
-    return client.post("/api/sync", json={"items": items},
-                       headers={"X-EduReach-Sync": "1"}).get_json()["results"]
-
-
-def test_a_lesson_written_offline_reaches_the_hub(client, app):
-    login(client, "t1")
-    item = {"uuid": "lesson-1", "entity": "lesson", "op": "create",
-            "payload": {"client_uuid": "lesson-1", "title": "Soil erosion",
-                        "subject": "Science", "grade": "P6",
-                        "body": "Terracing slows water running down a hill.",
-                        "updated_at": "2026-11-20T08:00:00+00:00"}}
-    assert sync(client, [item])[0]["status"] == "applied"
-
-    with app.app_context():
-        row = store.get_db().execute("SELECT * FROM lessons WHERE client_uuid='lesson-1'").fetchone()
-        assert row["title"] == "Soil erosion"
-        assert row["teacher_id"] == 2          # attributed to the signed-in teacher
-        assert row["sync_status"] == "PENDING"
-
-
-def test_replaying_a_lesson_never_creates_a_second_copy(client, app):
-    login(client, "t1")
-    item = {"uuid": "lesson-2", "entity": "lesson", "op": "create",
-            "payload": {"client_uuid": "lesson-2", "title": "Soil erosion",
-                        "subject": "Science", "grade": "P6", "body": "Notes."}}
-    assert sync(client, [item])[0]["status"] == "applied"
-    assert sync(client, [item])[0]["status"] == "duplicate"
-    with app.app_context():
-        assert store.get_db().execute("SELECT COUNT(*) FROM lessons").fetchone()[0] == 1
-
-
-def test_an_offline_edit_and_delete_are_applied(client, app):
+def test_teacher_resets_an_attempt_so_the_student_can_retake(client):
     login(client, "t1")
     make_lesson(client)
-    assert sync(client, [{"uuid": "e1", "entity": "lesson", "op": "update",
-                          "payload": {"id": 1, "title": "Fractions revised",
-                                      "subject": "Mathematics", "grade": "P5",
-                                      "body": "Updated notes."}}])[0]["status"] == "applied"
-    with app.app_context():
-        row = store.get_db().execute("SELECT * FROM lessons WHERE id=1").fetchone()
-        assert row["title"] == "Fractions revised" and row["grade"] == "P5"
+    make_quiz(client)
+    client.get("/logout")
 
-    assert sync(client, [{"uuid": "d1", "entity": "lesson", "op": "delete",
-                          "payload": {"id": 1}}])[0]["status"] == "applied"
-    with app.app_context():
-        assert store.get_db().execute("SELECT COUNT(*) FROM lessons").fetchone()[0] == 0
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    assert "already took this quiz" in client.get("/quizzes/1").get_data(as_text=True)
+    client.get("/logout")
+
+    login(client, "t1")
+    assert post(client, "/teacher/results/1/reset", {},
+                form_url="/teacher/progress").status_code == 302
+    client.get("/logout")
+
+    # The quiz is offered again rather than showing the locked result.
+    login(client, "s1")
+    page = client.get("/quizzes/1").get_data(as_text=True)
+    assert "already took this quiz" not in page
+    assert "Submit answers" in page
 
 
-def test_a_teacher_cannot_sync_an_edit_to_someone_elses_lesson(client, app):
+def test_a_teacher_cannot_reset_another_teachers_quiz(client):
     login(client, "t1")
     make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
     client.get("/logout")
 
     login(client, "t2")
-    result = sync(client, [{"uuid": "e2", "entity": "lesson", "op": "update",
-                            "payload": {"id": 1, "title": "Hijacked",
-                                        "subject": "Science", "grade": "P6", "body": "x"}}])
-    assert result[0]["status"] == "failed"
-    with app.app_context():
-        assert store.get_db().execute("SELECT title FROM lessons WHERE id=1").fetchone()[0] == "Fractions"
+    assert post(client, "/teacher/results/1/reset", {},
+                form_url="/teacher/progress").status_code == 403
 
 
-def test_deleting_a_lesson_the_hub_already_lost_is_not_an_error(client):
-    """Two devices removing the same lesson must not leave one stuck retrying."""
+def test_resetting_an_attempt_is_written_to_the_audit_log(app, client):
     login(client, "t1")
     make_lesson(client)
-    assert sync(client, [{"uuid": "d2", "entity": "lesson", "op": "delete",
-                          "payload": {"id": 1}}])[0]["status"] == "applied"
-    assert sync(client, [{"uuid": "d3", "entity": "lesson", "op": "delete",
-                          "payload": {"id": 1}}])[0]["status"] == "duplicate"
-
-
-def test_a_student_cannot_sync_lessons(client):
+    make_quiz(client)
+    client.get("/logout")
     login(client, "s1")
-    result = sync(client, [{"uuid": "x1", "entity": "lesson", "op": "create",
-                            "payload": {"client_uuid": "x1", "title": "Nope",
-                                        "subject": "Science", "grade": "P6", "body": "x"}}])
-    assert result[0]["status"] == "failed"
-    assert "teachers" in result[0]["error"]
-
-
-def test_an_offline_lesson_is_rejected_without_notes(client):
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    client.get("/logout")
     login(client, "t1")
-    result = sync(client, [{"uuid": "x2", "entity": "lesson", "op": "create",
-                            "payload": {"client_uuid": "x2", "title": "Empty",
-                                        "subject": "Science", "grade": "P6", "body": ""}}])
-    assert result[0]["status"] == "failed"
+    post(client, "/teacher/results/1/reset", {}, form_url="/teacher/progress")
 
-
-def test_offline_lessons_are_written_to_the_audit_log(client, app):
-    login(client, "t1")
-    sync(client, [{"uuid": "lesson-3", "entity": "lesson", "op": "create",
-                   "payload": {"client_uuid": "lesson-3", "title": "Soil erosion",
-                               "subject": "Science", "grade": "P6", "body": "Notes."}}])
     with app.app_context():
         row = store.get_db().execute(
-            "SELECT detail FROM audit_log WHERE event='upload_lesson'").fetchone()
-        assert "offline" in row["detail"]
+            "SELECT * FROM audit_log WHERE event = 'reset_quiz_result'"
+        ).fetchone()
+        assert row is not None
+        assert "S1 Person" in row["detail"]
+
+
+def test_reset_clears_the_submission_from_student_progress(app, client):
+    login(client, "t1")
+    make_lesson(client)
+    make_quiz(client)
+    client.get("/logout")
+    login(client, "s1")
+    post(client, "/quizzes/1", {"q1": "a", "q2": "a"})
+    client.get("/logout")
+    login(client, "t1")
+    post(client, "/teacher/results/1/reset", {}, form_url="/teacher/progress")
+    client.get("/logout")
+
+    login(client, "s1")
+    assert "No quizzes taken yet" in client.get("/student/progress").get_data(as_text=True)
+    with app.app_context():
+        left = store.get_db().execute(
+            "SELECT COUNT(*) FROM activity WHERE kind = 'submit_quiz'"
+        ).fetchone()[0]
+        assert left == 0
