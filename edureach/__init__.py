@@ -614,6 +614,73 @@ def _register_routes(app):
         )
         return "applied", None
 
+    def _sync_lesson(db, uid, op, payload):
+        """Replay a lesson a teacher wrote, edited or removed with no network.
+
+        Offline lessons are notes only — an attachment needs the upload route,
+        which the interface says plainly rather than failing here."""
+        uuid = payload.get("client_uuid")
+        if op == "create":
+            if not uuid:
+                return "failed", "missing client_uuid"
+            if db.execute("SELECT 1 FROM lessons WHERE client_uuid = ?", (uuid,)).fetchone():
+                return "duplicate", None
+            title = (payload.get("title") or "").strip()
+            subject, grade = payload.get("subject"), payload.get("grade")
+            body = (payload.get("body") or "").strip()
+            if not title:
+                return "failed", "a lesson needs a title"
+            if subject not in SUBJECTS or grade not in GRADES:
+                return "failed", "unknown subject or grade"
+            if not body:
+                return "failed", "a lesson written offline needs notes"
+            ts = payload.get("updated_at") or store.now()
+            db.execute(
+                "INSERT INTO lessons (teacher_id, title, subject, grade, body, created_at, updated_at, client_uuid)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (uid, title, subject, grade, body, ts, ts, uuid),
+            )
+            store.log_event(db, uid, "upload_lesson", f"{title} (offline)")
+            return "applied", None
+
+        lesson_id = payload.get("id")
+        if not lesson_id:
+            return "failed", "missing lesson id"
+        owned = db.execute(
+            "SELECT * FROM lessons WHERE id = ? AND teacher_id = ?", (lesson_id, uid)
+        ).fetchone()
+        if owned is None:
+            # Either it was removed on the hub meanwhile, or it is not theirs.
+            # Reported as a duplicate for a delete, since the end state matches.
+            if op == "delete":
+                return "duplicate", None
+            return "failed", "that lesson is no longer yours to edit"
+
+        if op == "delete":
+            db.execute("DELETE FROM lessons WHERE id = ?", (lesson_id,))
+            store.log_event(db, uid, "delete_lesson", owned["title"])
+            return "applied", None
+
+        if op == "update":
+            title = (payload.get("title") or "").strip()
+            subject, grade = payload.get("subject"), payload.get("grade")
+            body = (payload.get("body") or "").strip()
+            if not title:
+                return "failed", "a lesson needs a title"
+            if subject not in SUBJECTS or grade not in GRADES:
+                return "failed", "unknown subject or grade"
+            if not body and not owned["file_name"]:
+                return "failed", "a lesson needs notes or an attachment"
+            db.execute(
+                "UPDATE lessons SET title=?, subject=?, grade=?, body=?, updated_at=?,"
+                " sync_status='PENDING' WHERE id=?",
+                (title, subject, grade, body, payload.get("updated_at") or store.now(), lesson_id),
+            )
+            store.log_event(db, uid, "edit_lesson", title)
+            return "applied", None
+
+        return "failed", f"unknown operation {op!r}"
+
     def _sync_activity(db, uid, payload):
         uuid = payload.get("client_uuid")
         if not uuid:
@@ -658,6 +725,11 @@ def _register_routes(app):
                         status, error = _sync_quiz_result(db, uid, payload)
                     elif entity == "activity":
                         status, error = _sync_activity(db, uid, payload)
+                    elif entity == "lesson":
+                        if g.user["role"] != "teacher":
+                            status, error = "failed", "only teachers can change lessons"
+                        else:
+                            status, error = _sync_lesson(db, uid, item.get("op"), payload)
                     else:
                         status, error = "failed", f"unknown entity {entity!r}"
             except Exception as exc:                      # noqa: BLE001 — reported per item
