@@ -31,26 +31,87 @@ The app works completely offline. Try logging in, opening a lesson, and taking a
 | FR 4.2 Student sees own quiz history and average | Done |
 | FR 4.3 Teacher sees class results on their own quizzes | Done |
 | FR 6.1 Admin switches accounts on/off | Done |
+| FR 6.2 / 6.3 Administrator reports and hub status | Done |
 | NFR 1 Works with no internet connection (installable PWA, offline shell, IndexedDB) | Done |
-| NFR 3 English / Kinyarwanda toggle (student screens) | In progress |
+| NFR 3 English / Kinyarwanda toggle (student screens) | Done |
 | NFR 6 Power-cut safety (SQLite WAL + synchronous=FULL, atomic file writes) | Done |
 | NFR 9 Log of uploads and account changes | Done |
+| Teacher writes, edits and removes lessons with no connection | Done |
+| Teacher resets a pupil's quiz attempt | Done |
 | FR 5 Sync with Central Sync Server | In progress |
-| FR 6.2 / 6.3 Reports and hub status | In progress |
-| Teacher resets a quiz attempt | In progress |
+| NFR 3 Kinyarwanda on teacher and administrator screens | In progress |
 
-## Run it
+## Run it on your own machine
+
+Nothing beyond Python is needed: no database server, no Node, no build step.
+
+**Before you start** — Python 3.9 or newer, and Git. Check with:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python3 --version
+git --version
+```
+
+If `python3` is missing: [python.org/downloads](https://www.python.org/downloads/), or
+`sudo apt install python3 python3-venv` on Ubuntu or Debian.
+
+**1. Get the code**
+
+```bash
+git clone https://github.com/nshutilancelot3/edureach-rwanda.git
+cd edureach-rwanda
+```
+
+**2. Create a virtual environment and switch to it**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+On Windows, the second line is `.venv\Scripts\activate` instead. Your prompt
+should now start with `(.venv)`.
+
+**3. Install the dependencies**
+
+```bash
 pip install -r requirements.txt
-python seed.py                                       # demo accounts + sample lessons
+```
+
+**4. Start the hub**
+
+```bash
 flask --app edureach run --host 0.0.0.0 --port 5000
 ```
 
-Open http://localhost:5000. Other devices on the same Wi-Fi use `http://<hub-ip>:5000`.
+The first start creates the database and fills it with the demo accounts and
+six sample lessons, so there is no separate setup command to remember. Leave
+this terminal running.
 
-Demo logins: `admin / admin123`, `teacher / teach123`, `student / 1234` (P6). Change these before a real pilot.
+**5. Open it**
+
+Go to **http://localhost:5000** and sign in with any of:
+
+| Role | Username | Password |
+|---|---|---|
+| Student (P6) | `student` | `1234` |
+| Teacher | `teacher` | `teach123` |
+| Administrator | `admin` | `admin123` |
+
+Change these before any real pilot.
+
+Other devices on the same Wi-Fi reach the hub at `http://<hub-ip>:5000` — that
+is how a classroom uses it, with the hub on the teacher's device and pupils on
+tablets or phones. Find the address with `hostname -I` on Linux or `ipconfig`
+on Windows.
+
+**To stop it**, press `Ctrl+C`. To come back later, repeat steps 2, 4 and 5 —
+your data is kept in `instance/`.
+
+**Useful to know**
+
+- `python seed.py` prints what is currently on the hub, and seeds it if empty.
+- To start over from scratch, delete the `instance/` folder and start the hub again.
 
 ## Working offline
 
@@ -108,38 +169,47 @@ the teacher, which limits the exposure.
 
 ## Tests
 
+With the virtual environment active:
+
 ```bash
 pytest
 ```
 
-32 tests cover login and roles, CSRF protection, account creation and switching
+49 tests cover login and roles, CSRF protection, account creation and switching
 off, lesson upload and file-type checks, teacher ownership, quiz answer keys,
 browse/search, auto-marking and result locking, progress views, the language
-toggle, power-cut safety, and the offline layer — service worker scope, the
-shell carrying no user data, bootstrap contents, sync idempotency, locked
-results surviving a late sync, and one bad outbox item not blocking the rest.
+toggle, power-cut safety, administrator reports, resetting a pupil's attempt,
+and the offline layer — service worker scope, the shell carrying no user data,
+bootstrap contents, sync idempotency, locked results surviving a late sync,
+lessons written offline reaching the hub without duplicating, and one bad
+outbox item not blocking the rest.
 
 ## Stack
 
 Python 3 + Flask, SQLite, server-rendered HTML with almost no JavaScript, and no web fonts or animation, so it stays light on low-power hardware. Data lives in `instance/` (database, uploaded files and secret key) and is not committed.
 
-## Deploy to production
+## Deploy it
 
-**Currently deployed on Render**: https://edureach-rwanda.onrender.com
+Running at **https://edureach-rwanda.onrender.com**.
 
-To deploy your own instance, use Render:
+To put up your own copy on Render, which has a free tier:
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new?template=https://github.com/nshutilancelot3/edureach-rwanda)
+1. Sign in to [render.com](https://render.com) with GitHub.
+2. **New +** → **Web Service**, and pick this repository.
+3. Set:
+   - **Runtime** — `Python 3`
+   - **Build command** — `pip install -r requirements.txt`
+   - **Start command** — `waitress-serve --port=$PORT --host=0.0.0.0 --call 'edureach:create_app'`
+   - **Instance type** — `Free`
+4. **Create Web Service** and wait a few minutes.
 
-Alternatively, deploy to Render or any WSGI-compatible host:
+The hub seeds itself on first start, so there is no database to set up. A
+`Procfile` with the same start command is included for Heroku-compatible hosts.
 
-1. Connect your GitHub repo
-2. Set buildpack/runtime to Python 3.12
-3. Run `pip install -r requirements.txt && python seed.py` as build command
-4. Set start command to `waitress-serve --port=$PORT --host=0.0.0.0 --call 'edureach:create_app'`
-5. Deploy
-
-The Procfile is included for Heroku-compatible platforms.
+Two things to expect on a free tier: the service sleeps after inactivity, so the
+first request can take about a minute, and the disk is wiped on each deploy, so
+the hub seeds itself fresh. Both are properties of free hosting rather than the
+application — a real school hub keeps its disk.
 
 ## Known gaps
 
