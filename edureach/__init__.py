@@ -98,6 +98,7 @@ def _register_helpers(app):
             "csrf": session["csrf"],
             "SUBJECTS": SUBJECTS,
             "GRADES": GRADES,
+            "human_size": human_size,
         }
 
 
@@ -131,6 +132,35 @@ def _save_upload(file_storage, folder):
         os.fsync(fh.fileno())
     os.replace(tmp, os.path.join(folder, final))
     return final
+
+
+def _file_size(path):
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def _folder_size(folder):
+    total = 0
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            total += _file_size(os.path.join(root, name))
+    return total
+
+
+def _folder_count(folder):
+    return sum(len(files) for _root, _dirs, files in os.walk(folder))
+
+
+def human_size(num_bytes):
+    """Sizes an administrator can read at a glance on a small screen."""
+    value = float(num_bytes or 0)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 def _own_lesson(lesson_id):
@@ -243,6 +273,73 @@ def _register_routes(app):
             db.execute("UPDATE users SET active = 1 - active WHERE id = ?", (user_id,))
             store.log_event(db, g.user["id"], "toggle_account", str(user_id))
         return redirect(url_for("admin_users"))
+
+    # FR 6.2 reports + FR 6.3 hub status. An administrator visiting a school
+    # needs to answer "is this hub healthy and is it being used?" without a
+    # connection and without reading the database by hand.
+    @app.route("/admin/reports")
+    @login_required("admin")
+    def admin_reports():
+        db = store.get_db()
+
+        def scalar(sql, args=()):
+            return db.execute(sql, args).fetchone()[0]
+
+        accounts = db.execute(
+            "SELECT role, SUM(active) AS on_count, COUNT(*) - SUM(active) AS off_count"
+            " FROM users GROUP BY role ORDER BY role"
+        ).fetchall()
+
+        by_subject = db.execute(
+            "SELECT subject, COUNT(*) AS n FROM lessons GROUP BY subject ORDER BY n DESC, subject"
+        ).fetchall()
+        by_grade = db.execute(
+            "SELECT grade, COUNT(*) AS n FROM lessons GROUP BY grade ORDER BY grade"
+        ).fetchall()
+
+        popular = db.execute(
+            "SELECT l.title, l.subject, l.grade, COUNT(a.id) AS opens"
+            " FROM lessons l LEFT JOIN activity a"
+            "   ON a.lesson_id = l.id AND a.kind = 'view_lesson'"
+            " GROUP BY l.id ORDER BY opens DESC, l.title LIMIT 5"
+        ).fetchall()
+
+        quizzes = db.execute(
+            "SELECT q.title, l.grade, COUNT(r.id) AS attempts,"
+            " ROUND(AVG(100.0 * r.score / r.total)) AS avg_pct"
+            " FROM quizzes q JOIN lessons l ON l.id = q.lesson_id"
+            " LEFT JOIN quiz_results r ON r.quiz_id = q.id"
+            " GROUP BY q.id ORDER BY attempts DESC, q.title"
+        ).fetchall()
+
+        # FR 5 is not built yet, so everything still reads PENDING. Showing the
+        # backlog now means the figure is already meaningful the day sync lands.
+        pending = {
+            "lessons": scalar("SELECT COUNT(*) FROM lessons WHERE sync_status = 'PENDING'"),
+            "results": scalar("SELECT COUNT(*) FROM quiz_results WHERE sync_status = 'PENDING'"),
+            "activity": scalar("SELECT COUNT(*) FROM activity WHERE sync_status = 'PENDING'"),
+        }
+
+        status = {
+            "database_bytes": _file_size(app.config["DATABASE"]),
+            "uploads_bytes": _folder_size(app.config["UPLOAD_FOLDER"]),
+            "upload_count": _folder_count(app.config["UPLOAD_FOLDER"]),
+            "last_activity": scalar("SELECT MAX(at) FROM activity") or None,
+            "pending_total": sum(pending.values()),
+        }
+
+        totals = {
+            "users": scalar("SELECT COUNT(*) FROM users"),
+            "lessons": scalar("SELECT COUNT(*) FROM lessons"),
+            "quizzes": scalar("SELECT COUNT(*) FROM quizzes"),
+            "results": scalar("SELECT COUNT(*) FROM quiz_results"),
+        }
+
+        return render_template(
+            "admin/reports.html", accounts=accounts, by_subject=by_subject,
+            by_grade=by_grade, popular=popular, quizzes=quizzes,
+            pending=pending, status=status, totals=totals,
+        )
 
     @app.route("/admin/log")
     @login_required("admin")
