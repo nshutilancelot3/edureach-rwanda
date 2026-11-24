@@ -243,7 +243,7 @@ def _register_routes(app):
                 return redirect(url_for("home"))
         return render_template("login.html", error=error)
 
-    @app.route("/logout", methods=["POST"])
+    @app.route("/logout", methods=["GET", "POST"])
     def logout():
         lang = session.get("lang")
         session.clear()
