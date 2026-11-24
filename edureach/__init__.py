@@ -45,9 +45,19 @@ def create_app(test_config=None):
         try:
             user_count = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
             if user_count == 0:
+                print("[INIT] Database empty - loading demo data...")
                 _load_demo_data(db)
-        except Exception:
-            pass
+                print("[INIT] Demo data loaded successfully")
+            else:
+                print(f"[INIT] Database has {user_count} users - skipping seed")
+        except Exception as e:
+            print(f"[INIT] Error checking users: {e}")
+            try:
+                print("[INIT] Attempting to load demo data despite error...")
+                _load_demo_data(db)
+                print("[INIT] Demo data loaded")
+            except Exception as e2:
+                print(f"[INIT] Failed to load demo data: {e2}")
 
     _register_helpers(app)
     _register_routes(app)
