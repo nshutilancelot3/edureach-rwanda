@@ -36,6 +36,7 @@
     <a href="{{ url_for('teacher_progress') }}" class="{{ 'on' if request.endpoint == 'teacher_progress' }}">{{ icon('chart') }} Class progress</a>
   {% else %}
     <a href="{{ url_for('admin_users') }}" class="{{ 'on' if request.endpoint == 'admin_users' }}">{{ icon('users') }} Accounts</a>
+    <a href="{{ url_for('admin_reports') }}" class="{{ 'on' if request.endpoint == 'admin_reports' }}">{{ icon('chart') }} Reports</a>
     <a href="{{ url_for('admin_log') }}" class="{{ 'on' if request.endpoint == 'admin_log' }}">{{ icon('list') }} Activity log</a>
   {% endif %}
 </nav>

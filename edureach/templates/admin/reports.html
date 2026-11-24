@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from '_icons.html' import icon %}
+{% block content %}
+<h1>{{ icon('chart', 24) }} Reports and hub status</h1>
+
+{# FR 6.3 — is this hub healthy? #}
+<section class="card">
+  <h2>Hub status</h2>
+  <div class="stats">
+    <div class="stat"><span>{{ human_size(status.database_bytes) }}</span>Database</div>
+    <div class="stat"><span>{{ human_size(status.uploads_bytes) }}</span>Lesson files ({{ status.upload_count }})</div>
+    <div class="stat"><span>{{ status.pending_total }}</span>Waiting to sync</div>
+    <div class="stat"><span>{{ status.last_activity[:10] if status.last_activity else '—' }}</span>Last used</div>
+  </div>
+  <table>
+    <tr><th>Waiting for the Central Sync Server</th><th>Records</th></tr>
+    <tr><td>Lessons</td><td>{{ pending.lessons }}</td></tr>
+    <tr><td>Quiz results</td><td>{{ pending.results }}</td></tr>
+    <tr><td>Student activity</td><td>{{ pending.activity }}</td></tr>
+  </table>
+  <p class="muted">Sync to the Central Server is still being built, so records stay
+    marked <span class="tag pending">PENDING</span> on the hub until it is in place.</p>
+</section>
+
+{# FR 6.2 — is it being used, and by whom? #}
+<section class="card">
+  <h2>Accounts</h2>
+  <table>
+    <tr><th>Role</th><th>Active</th><th>Switched off</th></tr>
+    {% for a in accounts %}
+      <tr><td>{{ a.role|capitalize }}</td><td>{{ a.on_count }}</td><td>{{ a.off_count }}</td></tr>
+    {% else %}<tr><td colspan="3">No accounts yet.</td></tr>{% endfor %}
+    <tr><td><strong>Total</strong></td><td colspan="2"><strong>{{ totals.users }}</strong></td></tr>
+  </table>
+</section>
+
+<div class="grid2">
+  <section class="card">
+    <h2>Lessons by subject</h2>
+    <table>
+      <tr><th>Subject</th><th>Lessons</th></tr>
+      {% for s in by_subject %}<tr><td>{{ s.subject }}</td><td>{{ s.n }}</td></tr>
+      {% else %}<tr><td colspan="2">No lessons yet.</td></tr>{% endfor %}
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Lessons by grade</h2>
+    <table>
+      <tr><th>Grade</th><th>Lessons</th></tr>
+      {% for gr in by_grade %}<tr><td>{{ gr.grade }}</td><td>{{ gr.n }}</td></tr>
+      {% else %}<tr><td colspan="2">No lessons yet.</td></tr>{% endfor %}
+    </table>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Most opened lessons</h2>
+  <table>
+    <tr><th>Lesson</th><th>Subject</th><th>Grade</th><th>Times opened</th></tr>
+    {% for p in popular %}
+      <tr><td>{{ p.title }}</td><td>{{ p.subject }}</td><td>{{ p.grade }}</td><td>{{ p.opens }}</td></tr>
+    {% else %}<tr><td colspan="4">No lessons yet.</td></tr>{% endfor %}
+  </table>
+</section>
+
+<section class="card">
+  <h2>Quiz participation</h2>
+  <table>
+    <tr><th>Quiz</th><th>Grade</th><th>Attempts</th><th>Average</th></tr>
+    {% for q in quizzes %}
+      <tr><td>{{ q.title }}</td><td>{{ q.grade }}</td><td>{{ q.attempts }}</td>
+        <td>{{ (q.avg_pct|int ~ '%') if q.avg_pct is not none else '—' }}</td></tr>
+    {% else %}<tr><td colspan="4">No quizzes yet.</td></tr>{% endfor %}
+  </table>
+</section>
+{% endblock %}
