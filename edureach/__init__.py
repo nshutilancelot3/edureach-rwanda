@@ -5,7 +5,7 @@ import secrets
 from functools import wraps
 
 from flask import (
-    Flask, abort, flash, g, redirect, render_template, request,
+    Flask, abort, flash, g, jsonify, redirect, render_template, request,
     send_from_directory, session, url_for,
 )
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -563,35 +563,35 @@ def _register_routes(app):
     def api_data_users():
         db = store.get_db()
         users = db.execute("SELECT id, username, full_name, role FROM users WHERE active = 1").fetchall()
-        return [dict(u) for u in users]
+        return jsonify([dict(u) for u in users])
 
     @app.route("/api/data/lessons")
     @login_required()
     def api_data_lessons():
         db = store.get_db()
         lessons = db.execute("SELECT * FROM lessons").fetchall()
-        return [dict(l) for l in lessons]
+        return jsonify([dict(l) for l in lessons])
 
     @app.route("/api/data/quizzes")
     @login_required()
     def api_data_quizzes():
         db = store.get_db()
         quizzes = db.execute("SELECT * FROM quizzes").fetchall()
-        return [dict(q) for q in quizzes]
+        return jsonify([dict(q) for q in quizzes])
 
     @app.route("/api/data/questions")
     @login_required()
     def api_data_questions():
         db = store.get_db()
         questions = db.execute("SELECT * FROM questions").fetchall()
-        return [dict(q) for q in questions]
+        return jsonify([dict(q) for q in questions])
 
     @app.route("/api/data/quiz-results")
     @login_required()
     def api_data_quiz_results():
         db = store.get_db()
         results = db.execute("SELECT * FROM quiz_results WHERE student_id = ?", (g.user["id"],)).fetchall()
-        return [dict(r) for r in results]
+        return jsonify([dict(r) for r in results])
 
     @app.route("/api/sync/<table>/<int:record_id>", methods=["POST"])
     @login_required()
@@ -623,9 +623,9 @@ def _register_routes(app):
                 db.execute(f"DELETE FROM {table} WHERE id=?", (record_id,))
                 db.commit()
 
-            return {"success": True}, 200
+            return jsonify({"success": True}), 200
         except Exception as e:
-            return {"error": str(e)}, 400
+            return jsonify({"error": str(e)}), 400
 
     @app.errorhandler(403)
     def forbidden(_e):
