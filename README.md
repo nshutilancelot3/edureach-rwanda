@@ -4,6 +4,17 @@ An offline learning hub for rural schools. Teachers upload lessons and quizzes t
 
 Built from the EduReach Rwanda SRS v1.0 (Lancelot Nshuti, ALU). This is **increment 1**: the full student journey running offline.
 
+## 🌐 Live Demo
+
+**Try it now**: https://edureach-rwanda-production.up.railway.app
+
+Demo accounts:
+- **Student**: username `student`, password `1234` (P6 class)
+- **Teacher**: username `teacher`, password `teach123`
+- **Admin**: username `admin`, password `admin123`
+
+The app works completely offline. Try logging in, opening a lesson, and taking a quiz!
+
 ## What works now
 
 | SRS requirement | Status |
@@ -54,7 +65,9 @@ Python 3 + Flask, SQLite, server-rendered HTML with almost no JavaScript, and no
 
 ## Deploy to production
 
-Deploy to Railway in one click:
+**Currently deployed on Railway**: https://edureach-rwanda-production.up.railway.app
+
+To deploy your own instance, use Railway in one click:
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new?template=https://github.com/nshutilancelot3/edureach-rwanda)
 
